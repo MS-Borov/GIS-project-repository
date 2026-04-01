@@ -1,0 +1,140 @@
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: gis_platform_db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gis_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gis_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: gis_platform_redis
+    restart: unless-stopped
+
+    command: redis-server --appendonly yes
+
+    volumes:
+        - redis_data:/data
+      
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      
+  minio:
+    image: minio/minio:latest
+    container_name: gis-minio-dev
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+
+    environment:
+       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+    ports:
+       - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+       - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+        
+    volumes:
+      - minio_data:/data
+        
+    healthcheck:
+       test: ["CMD", "mc", "ready", "local"]
+       interval: 10s
+       timeout: 5s
+       retries: 5
+        
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gis-backend-dev
+    restart: unless-stopped
+
+    env_file:
+      - .env
+          
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+          
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+            
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    command: >
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gis-worker-dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    command: >
+      sh -c "taskiq worker app.tasks.broker:broker"
+    
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gis-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http:/localhost:8000}
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev", "--", "--host"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  backend_uploads:
+
+
+      
+
