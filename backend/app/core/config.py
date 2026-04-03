@@ -10,14 +10,12 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str = "postgres"
 
-    redis_host: str = "redis"
-    redis_port: int = 6379
-
-    jwt_access_secret: str = "change_me_access"
-    jwt_refresh_secret: str = "change_me_refresh"
-
-    environment: str = "development"
-    log_level: str = "info"
+    s3_endpoint: str = "minio:9000"
+    s3_access_key_id: str = "minioadmin"
+    s3_secret_access_key: str = "minioadmin"
+    s3_bucket_name: str = "submissions"
+    s3_region: str = "us-east-1"
+    s3_use_ssl: bool = False
 
     @property
     def database_url(self) -> str:

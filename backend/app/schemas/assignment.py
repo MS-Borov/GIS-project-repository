@@ -1,16 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
-class AssignmentBase(BaseModel):
-    title: str
+class AssignmentCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
 
 
-class AssignmentCreate(AssignmentBase):
-    pass
-
-
-class AssignmentRead(AssignmentBase):
+class AssignmentRead(BaseModel):
     id: int
+    title: str
+    description: str | None = None
 
     model_config = {"from_attributes": True}
