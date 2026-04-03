@@ -1,0 +1,22 @@
+.venv
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker Compose override (local development settings)
+compose.override.yml
+docker-compose.override.yml
+
+# Build artifacts
+dist/
+build/
+bin/
+server
+/agentsim
+cmd/server/server
+
+# Database
+*.db
+*.sqlite
