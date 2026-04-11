@@ -12,5 +12,6 @@ class SubmissionRead(BaseModel):
     size_bytes: int
     status: str
     created_at: datetime
+    download_url: str
 
     model_config = {"from_attributes": True}

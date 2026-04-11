@@ -10,3 +10,7 @@ taskiq
 taskiq-redis
 boto3
 olefile
+geopandas
+shapely
+pyogrio
+pyproj
