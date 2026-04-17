@@ -1,32 +1,38 @@
 def _normalize_text(value: str | None) -> str | None:
-    """
-    Нормализация строк для мягкого сравнения CRS и форматов.
-    """
     if value is None:
         return None
     return value.strip().lower().replace(" ", "")
 
+
 def evaluate_submission_against_requirements(requirements, validation_result: dict) -> dict:
     """
-    Сравнивает результат технической/GIS-проверки submission
-    с требованиями конкретного задания.
-
-    Важно:
-    - это не "финальный ИИ", а структурированный этап сопоставления;
-    - потом на основе этого результата LLM сможет делать понятное заключение.
+    Сравнивает результат технической/GIS-проверки с требованиями задания.
     """
     if requirements is None:
         return {
-            "status": "Warning",
-            "message": "Задание помечено, как не полностью автоматизируемое. Выполнена только базовая техническая проверка.",
+            "status": "warning",
+            "message": (
+                "Для задания пока не заданы структурированные требования. "
+                "Выполнена только базовая техническая проверка."
+            ),
         }
+
+    if requirements.auto_checkable is False:
+        return {
+            "status": "warning",
+            "message": (
+                "Задание помечено как не полностью автоматизируемое. "
+                "Выполнена только базовая техническая проверка."
+            ),
+        }
+
     problems = []
     warnings = []
 
     detected_format = validation_result.get("detected_format")
     details = validation_result.get("details", {})
 
-    # 1. Проверка формата сдачи
+    # 1. Формат сдачи
     if requirements.deliverable_format:
         if detected_format != requirements.deliverable_format:
             problems.append(
@@ -34,7 +40,7 @@ def evaluate_submission_against_requirements(requirements, validation_result: di
                 f"но фактически получен '{detected_format}'."
             )
 
-    # 2. Проверка типа геометрии
+    # 2. Типы геометрии
     if requirements.expected_geometry_types:
         uploaded_geometry_types = details.get("geometry_types")
         if not uploaded_geometry_types:
@@ -42,8 +48,6 @@ def evaluate_submission_against_requirements(requirements, validation_result: di
         else:
             expected = set(requirements.expected_geometry_types)
             actual = set(uploaded_geometry_types)
-
-            # Если среди загруженных типов есть неразрешённые — это проблема
             unexpected = sorted(actual - expected)
             if unexpected:
                 problems.append(
@@ -51,7 +55,7 @@ def evaluate_submission_against_requirements(requirements, validation_result: di
                     f"Ожидались: {', '.join(sorted(expected))}."
                 )
 
-    # 3. Проверка CRS
+    # 3. CRS
     if requirements.expected_crs:
         uploaded_crs = details.get("crs")
         if not uploaded_crs:
@@ -66,7 +70,7 @@ def evaluate_submission_against_requirements(requirements, validation_result: di
                     f"но обнаружена '{uploaded_crs}'."
                 )
 
-    # 4. Проверка обязательных атрибутов
+    # 4. Обязательные атрибуты
     if requirements.required_attributes:
         uploaded_fields = set(details.get("attribute_fields") or [])
         required_fields = set(requirements.required_attributes)
@@ -77,28 +81,26 @@ def evaluate_submission_against_requirements(requirements, validation_result: di
                 f"Отсутствуют обязательные поля: {', '.join(missing_fields)}."
             )
 
-    # 5. Базовая реакция на невалидную геометрию
+    # 5. Невалидные геометрии
     invalid_geometry_count = details.get("invalid_geometry_count")
     if isinstance(invalid_geometry_count, int) and invalid_geometry_count > 0:
         warnings.append(
             f"Обнаружено невалидных геометрий: {invalid_geometry_count}."
         )
 
-    # 6. Пока только предупреждаем, если заданию нужен эталонный слой,
-    # но отдельная логика эталонного сравнения ещё не реализована.
+    # 6. Эталонный слой
     if requirements.needs_reference_layer:
         warnings.append(
             "Для задания требуется эталонный слой / подложка, "
             "но автоматическое сравнение с эталоном пока не реализовано."
         )
 
-    # 7. Отчёт пока не проверяем
+    # 7. Отчёт
     if requirements.report_required:
         warnings.append(
             "Для задания требуется отчёт, но автоматическая проверка отчёта пока не реализована."
         )
 
-    # Итоговый статус
     if problems:
         status = "failed"
     elif warnings:

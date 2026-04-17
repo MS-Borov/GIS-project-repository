@@ -9,6 +9,10 @@ class SubmissionAssetRead(BaseModel):
     detected_format: str
     status: str
     message: str
+    storage_key: str | None = None
+    group_key: str | None = None
     created_at: datetime
+    updated_at: datetime
+    download_url: str | None = None
 
     model_config = {"from_attributes": True}

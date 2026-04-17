@@ -68,6 +68,11 @@ services:
 
     env_file:
       - .env
+    
+    # Нужно, чтобы контейнер видел Ollama, запущенный на хосте.
+    # Для Linux/WSL это обычно самый простой путь.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
           
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"

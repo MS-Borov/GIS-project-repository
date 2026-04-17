@@ -12,6 +12,8 @@ from app.models.assignment_requirements import AssignmentRequirements  # noqa: F
 from app.models.submission import Submission  # noqa: F401
 from app.models.submission_check import SubmissionCheck  # noqa: F401
 from app.models.submission_asset import SubmissionAsset
+from app.api.routes.asset_downloads import router as asset_downloads_router
+from app.api.routes.ai_review import router as ai_review_router
 
 app = FastAPI(title="GIS Education Platform API")
 
@@ -22,3 +24,5 @@ app.include_router(assignments_router)
 app.include_router(submissions_router)
 app.include_router(downloads_router)
 app.include_router(assignment_requirements_router)
+app.include_router(asset_downloads_router)
+app.include_router(ai_review_router)

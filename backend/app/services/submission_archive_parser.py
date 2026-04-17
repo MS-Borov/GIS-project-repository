@@ -2,6 +2,7 @@ import io
 import zipfile
 from pathlib import Path
 
+from app.services.storage import build_shapefile_asset_zip
 from app.services.submission_validator import validate_submission_file
 
 
@@ -27,6 +28,8 @@ def _build_asset(
     detected_format: str,
     status: str,
     message: str,
+    file_bytes: bytes | None = None,
+    group_key: str | None = None,
 ) -> dict:
     """
     Унифицированное представление одного asset внутри архива.
@@ -37,6 +40,8 @@ def _build_asset(
         "detected_format": detected_format,
         "status": status,
         "message": message,
+        "file_bytes": file_bytes,
+        "group_key": group_key,
     }
 
 
@@ -60,6 +65,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
                 detected_format="zip",
                 status="failed",
                 message="Архив не удалось открыть как корректный ZIP.",
+                file_bytes=None,
             )
         ]
 
@@ -72,6 +78,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
                 detected_format="zip",
                 status="failed",
                 message="Архив пустой.",
+                file_bytes=None,
             )
         ]
 
@@ -95,6 +102,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
                     detected_format=validation["detected_format"],
                     status=validation["status"],
                     message=validation["message"],
+                    file_bytes=data,
                 )
             )
 
@@ -116,6 +124,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
                     detected_format=validation["detected_format"],
                     status=validation["status"],
                     message=validation["message"],
+                    file_bytes=data,
                 )
             )
 
@@ -139,17 +148,16 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
         if not has_shp:
             continue
 
-        # Собираем мини-zip только для одного shapefile-набора,
-        # чтобы reuse-ить уже существующий validator.
-        memory_zip = io.BytesIO()
-        with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            for original_name in group_files:
+        group_bytes_map: dict[str, bytes]={}
+        for original_name in group_files:
                 with archive.open(original_name) as f:
-                    zf.writestr(Path(original_name).name, f.read())
+                    group_bytes_map[Path(original_name).name] = f.read()
+
+        shapefile_zip_bytes = build_shapefile_asset_zip(group_bytes_map)
 
         validation = validate_submission_file(
             filename=f"{Path(group_key).name}.zip",
-            file_bytes=memory_zip.getvalue(),
+            file_bytes=shapefile_zip_bytes,
         )
 
         assets.append(
@@ -159,6 +167,8 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
                 detected_format=validation["detected_format"],
                 status=validation["status"],
                 message=validation["message"],
+                file_bytes=shapefile_zip_bytes,
+                group_key=group_key,
             )
         )
 
@@ -173,6 +183,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
                 detected_format="zip",
                 status="warning",
                 message="Архив открыт, но внутри не найдено поддерживаемых отчётов или GIS-слоёв.",
+                file_bytes=None,
             )
         )
 

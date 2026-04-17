@@ -17,6 +17,20 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_use_ssl: bool = False
 
+    # --- LLM config ---
+    # ollama | openai
+    llm_backend: str = "ollama"
+
+    # Для Ollama:
+    # контейнер backend будет ходить на хост по host.docker.internal
+    llm_base_url: str = "http://host.docker.internal:11434"
+    llm_model: str = "qwen2.5:3b"
+
+    # Эти поля можно оставить на будущее,
+    # если захочешь снова подключить облачный API.
+    openai_api_key: str | None = None
+    openai_base_url: str | None = None
+
     @property
     def database_url(self) -> str:
         return (
