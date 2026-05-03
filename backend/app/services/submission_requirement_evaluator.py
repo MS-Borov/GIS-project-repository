@@ -4,6 +4,12 @@ def _normalize_text(value: str | None) -> str | None:
     return value.strip().lower().replace(" ", "")
 
 
+def _normalize_geometry_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value.strip().replace(" ", "").lower()
+
+
 def evaluate_submission_against_requirements(requirements, validation_result: dict) -> dict:
     """
     Сравнивает результат технической/GIS-проверки с требованиями задания.
@@ -46,8 +52,22 @@ def evaluate_submission_against_requirements(requirements, validation_result: di
         if not uploaded_geometry_types:
             warnings.append("Не удалось определить типы геометрии в submission.")
         else:
-            expected = set(requirements.expected_geometry_types)
-            actual = set(uploaded_geometry_types)
+            expected = {
+                normalized
+                for normalized in (
+                    _normalize_geometry_type(value)
+                    for value in requirements.expected_geometry_types
+                )
+                if normalized
+            }
+            actual = {
+                normalized
+                for normalized in (
+                    _normalize_geometry_type(value)
+                    for value in uploaded_geometry_types
+                )
+                if normalized
+            }
             unexpected = sorted(actual - expected)
             if unexpected:
                 problems.append(

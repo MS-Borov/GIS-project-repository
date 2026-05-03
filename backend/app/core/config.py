@@ -17,19 +17,23 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_use_ssl: bool = False
 
-    # --- LLM config ---
-    # ollama | openai
-    llm_backend: str = "ollama"
+    redis_url: str = "redis://redis:6379/0"
 
-    # Для Ollama:
-    # контейнер backend будет ходить на хост по host.docker.internal
-    llm_base_url: str = "http://host.docker.internal:11434"
-    llm_model: str = "qwen2.5:3b"
-
-    # Эти поля можно оставить на будущее,
-    # если захочешь снова подключить облачный API.
+    # cerebras_relay | ollama
+    llm_backend: str = "cerebras_relay"
     openai_api_key: str | None = None
-    openai_base_url: str | None = None
+
+    # Cerebras relay
+    cerebras_model: str = "llama3.1-8b"
+    cerebras_relay_url: str = "http://host.docker.internal:8788/chat"
+
+    # Локальный fallback можно оставить
+    llm_base_url: str = "http://host.docker.internal:11434"
+    llm_model: str = "qwen3.5:2b"
+
+    auth_secret_key: str = "change-me-in-production"
+    auth_access_token_expire_minutes: int = 60 * 24
+    rate_limit_enabled: bool = True
 
     @property
     def database_url(self) -> str:

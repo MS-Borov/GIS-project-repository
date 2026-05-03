@@ -16,6 +16,11 @@ class Submission(Base):
         nullable=False,
         index=True,
     )
+    student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
@@ -31,3 +36,4 @@ class Submission(Base):
     )
 
     assignment = relationship("Assignment", backref="submissions")
+    student = relationship("User", backref="submissions")

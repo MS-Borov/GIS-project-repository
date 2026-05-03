@@ -1,13 +1,25 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 import logging
+
+from app.core.config import settings
+from app.api.deps.auth import ensure_submission_access, get_current_user, require_student
+from app.services.document_text_extractor import extract_document_text
+from app.services.rate_limit import build_rate_limit_key, enforce_rate_limit, get_client_ip
+from app.services.storage import get_s3_client
+
+from app.services.multi_layer_requirement_matcher import match_assets_to_expected_outputs
+from app.services.expected_output_evaluator import evaluate_asset_against_expected_output
+from app.services.multi_layer_summary_builder import build_multi_layer_summary
 
 from app.db.session import get_db
 from app.models.assignment import Assignment
 from app.models.assignment_requirements import AssignmentRequirements
+from app.models.course import CourseMember
 from app.models.submission import Submission
 from app.models.submission_check import SubmissionCheck
 from app.models.submission_asset import SubmissionAsset
+from app.models.user import User
 from app.schemas.submission import SubmissionRead
 from app.schemas.submission_asset import SubmissionAssetRead
 from app.schemas.submission_check import SubmissionCheckRead
@@ -35,11 +47,81 @@ def _asset_type_from_detected_format(detected_format: str) -> str:
         return "report"
     return "other"
 
+def _load_asset_bytes(storage_key: str) -> bytes:
+    """
+    Загружает asset из MinIO по storage_key.
+    """
+    s3 = get_s3_client()
+    obj = s3.get_object(
+        Bucket=settings.s3_bucket_name,
+        Key=storage_key,
+    )
+    return obj["Body"].read()
+
+
+def _extract_report_text_for_target_selection(assets: list[SubmissionAsset]) -> str | None:
+    """
+    Пытаемся извлечь текст первого найденного report asset,
+    чтобы использовать его при выборе target GIS asset.
+    """
+    report_asset = next(
+        (asset for asset in assets if asset.asset_type == "report" and asset.storage_key),
+        None,
+    )
+
+    if not report_asset:
+        return None
+
+    try:
+        report_bytes = _load_asset_bytes(report_asset.storage_key)
+        extracted = extract_document_text(
+            filename=report_asset.asset_name,
+            file_bytes=report_bytes,
+        )
+        if extracted.get("can_analyze"):
+            return extracted.get("text")
+    except Exception:
+        # Не валим pipeline только из-за невозможности извлечь текст отчёта
+        return None
+
+    return None
+
+
+def _has_report_asset(assets: list[SubmissionAsset]) -> bool:
+    return any(asset.asset_type == "report" for asset in assets)
+
+
+def _has_layer_asset(assets: list[SubmissionAsset]) -> bool:
+    return any(asset.asset_type == "layer" for asset in assets)
+
+
+def _ensure_student_can_submit_assignment(
+    assignment: Assignment,
+    current_user: User,
+    db: Session,
+) -> None:
+    if assignment.course_id is None:
+        return
+
+    membership = (
+        db.query(CourseMember)
+        .filter(
+            CourseMember.course_id == assignment.course_id,
+            CourseMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if membership:
+        return
+
+    raise HTTPException(status_code=403, detail="Course membership required to submit this assignment")
+
 
 def to_submission_read(submission: Submission) -> SubmissionRead:
     return SubmissionRead(
         id=submission.id,
         assignment_id=submission.assignment_id,
+        student_id=submission.student_id,
         original_filename=submission.original_filename,
         storage_key=submission.storage_key,
         content_type=submission.content_type,
@@ -50,29 +132,55 @@ def to_submission_read(submission: Submission) -> SubmissionRead:
     )
 
 
+def to_submission_asset_read(asset: SubmissionAsset) -> SubmissionAssetRead:
+    return SubmissionAssetRead(
+        id=asset.id,
+        submission_id=asset.submission_id,
+        asset_name=asset.asset_name,
+        asset_type=asset.asset_type,
+        detected_format=asset.detected_format,
+        status=asset.status,
+        message=asset.message,
+        storage_key=asset.storage_key,
+        group_key=asset.group_key,
+        created_at=asset.created_at,
+        updated_at=asset.updated_at,
+        download_url=f"/downloads/submission-assets/{asset.id}",
+    )
+
+
 
 @router.post("/", response_model=SubmissionRead, status_code=status.HTTP_201_CREATED)
 def create_submission(
+    request: Request,
     assignment_id: int = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_student),
 ):
+    """
+    Pipeline:
+    1. Проверяем, что assignment существует
+    2. Сохраняем исходный файл submission в MinIO
+    3. Создаём Submission
+    4. Если zip -> разбираем архив на assets и сохраняем их отдельно
+    5. Если не zip -> создаём один asset
+    6. Делаем technical checks по asset-ам
+    7. Выбираем target GIS asset
+    8. Делаем requirements-check
+    9. Обновляем итоговый статус submission
+    """
     try:
-        """
-        Pipeline:
-        1. Проверяем, что assignment существует
-        2. Сохраняем исходный файл submission в MinIO
-        3. Создаём Submission
-        4. Если zip -> разбираем архив на assets и сохраняем их отдельно
-        5. Если не zip -> создаём один asset
-        6. Делаем technical checks по asset-ам
-        7. Выбираем target GIS asset
-        8. Делаем requirements-check
-        9. Обновляем итоговый статус submission
-        """
+        enforce_rate_limit(
+            build_rate_limit_key("submission-upload", get_client_ip(request), str(current_user.id)),
+            max_requests=10,
+            window_seconds=600,
+        )
+
         assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
         if not assignment:
             raise HTTPException(status_code=404, detail="Assignment not found")
+        _ensure_student_can_submit_assignment(assignment, current_user, db)
 
         # Читаем файл целиком для проверки / парсинга
         file_bytes = file.file.read()
@@ -88,6 +196,7 @@ def create_submission(
         # Создаём запись Submission
         submission = Submission(
             assignment_id=assignment_id,
+            student_id=current_user.id,
             original_filename=file.filename,
             storage_key=storage_key,
             content_type=file.content_type,
@@ -200,7 +309,7 @@ def create_submission(
         db.commit()
 
         # -------------------------------------------------
-        # 4. REQUIREMENTS EVALUATION AGAINST TARGET GIS ASSET
+        # 4. REQUIREMENTS EVALUATION FOR MULTIPLE EXPECTED OUTPUTS
         # -------------------------------------------------
         requirements = (
             db.query(AssignmentRequirements)
@@ -208,42 +317,158 @@ def create_submission(
             .first()
         )
 
-        target_asset = choose_target_gis_asset(created_assets, requirements)
+        expected_outputs = requirements.expected_outputs_json if requirements else None
 
-        if target_asset is None:
-            requirement_evaluation = {
-                "status": "warning",
-                "message": (
-                    "Не удалось однозначно выбрать целевой GIS-asset для проверки по требованиям. "
-                    "Выполнена только техническая проверка assets."
-                ),
-                "result_json": {
-                    "mode": "target_asset_not_selected",
-                    "problems": [],
-                    "warnings": [
-                        "Не удалось однозначно выбрать целевой GIS-asset."
-                    ],
-                    "passed_rules": [],
-                },
-            }
-        else:
-            validation_result = asset_validation_map.get(target_asset.id, {})
-            requirement_evaluation = evaluate_asset_against_requirements(
-                requirements=requirements,
-                validation_result=validation_result,
+        if expected_outputs:
+            match_result = match_assets_to_expected_outputs(
+                created_assets,
+                expected_outputs=expected_outputs,
             )
 
-        requirements_check = SubmissionCheck(
-            submission_id=submission.id,
-            submission_asset_id=target_asset.id if target_asset else None,
-            status=requirement_evaluation["status"],
-            file_type="requirements",
-            message=requirement_evaluation["message"],
-            result_json=requirement_evaluation.get("result_json"),
-        )
-        db.add(requirements_check)
-        db.commit()
+            output_evaluations = []
 
+            for match in match_result["matches"]:
+                expected_output = match["expected_output"]
+                asset_id = match["asset_id"]
+
+                if asset_id is None:
+                    output_evaluation = {
+                        "status": "failed",
+                        "message": f"Не найден asset для ожидаемого output '{expected_output.get('name')}'.",
+                        "result_json": {
+                            "mode": "expected_output_missing",
+                            "expected_output": expected_output,
+                            "problems": [
+                                {
+                                    "code": "expected_output_missing",
+                                    "message": f"Не найден asset для ожидаемого output '{expected_output.get('name')}'.",
+                                }
+                            ],
+                            "warnings": [],
+                            "passed_rules": [],
+                        },
+                    }
+
+                    output_evaluations.append({
+                        "expected_output": expected_output,
+                        "asset_id": None,
+                        "status": output_evaluation["status"],
+                        "message": output_evaluation["message"],
+                    })
+
+                    db.add(
+                        SubmissionCheck(
+                            submission_id=submission.id,
+                            submission_asset_id=None,
+                            status=output_evaluation["status"],
+                            file_type="requirements_output",
+                            message=output_evaluation["message"],
+                            result_json=output_evaluation["result_json"],
+                        )
+                    )
+                    continue
+
+                matched_asset = next((asset for asset in created_assets if asset.id == asset_id), None)
+                validation_result = asset_validation_map.get(asset_id, {})
+
+                output_evaluation = evaluate_asset_against_expected_output(
+                    expected_output=expected_output,
+                    validation_result=validation_result,
+                )
+
+                output_evaluations.append({
+                    "expected_output": expected_output,
+                    "asset_id": asset_id,
+                    "asset_name": matched_asset.asset_name if matched_asset else None,
+                    "status": output_evaluation["status"],
+                    "message": output_evaluation["message"],
+                })
+
+                db.add(
+                    SubmissionCheck(
+                        submission_id=submission.id,
+                        submission_asset_id=asset_id,
+                        status=output_evaluation["status"],
+                        file_type="requirements_output",
+                        message=output_evaluation["message"],
+                        result_json=output_evaluation["result_json"],
+                    )
+                )
+
+            multi_layer_summary = build_multi_layer_summary(
+                match_result=match_result,
+                output_evaluations=output_evaluations,
+            )
+
+            db.add(
+                SubmissionCheck(
+                    submission_id=submission.id,
+                    submission_asset_id=None,
+                    status=multi_layer_summary["status"],
+                    file_type="requirements_summary",
+                    message=multi_layer_summary["message"],
+                    result_json=multi_layer_summary["result_json"],
+                )
+            )
+            db.commit()
+
+        else:
+            # Старый упрощённый режим можно временно оставить для заданий с одним слоем
+            target_asset = choose_target_gis_asset(created_assets, requirements)
+
+            if target_asset is None:
+                report_only_mode = _has_report_asset(created_assets) and not _has_layer_asset(created_assets)
+                requirement_evaluation = {
+                    "status": "passed" if report_only_mode else "warning",
+                    "message": (
+                        "Submission содержит только report asset. Выполняется report-only review без GIS-layer formal-check."
+                        if report_only_mode
+                        else (
+                            "Не удалось однозначно выбрать целевой GIS-asset для проверки по требованиям. "
+                            "Выполнена только техническая проверка assets."
+                        )
+                    ),
+                    "result_json": {
+                        "mode": "report_only_submission" if report_only_mode else "target_asset_not_selected",
+                        "problems": [],
+                        "warnings": []
+                        if report_only_mode
+                        else [
+                            "Не удалось однозначно выбрать целевой GIS-asset."
+                        ],
+                        "passed_rules": [
+                            "Report asset uploaded and recognized."
+                        ] if report_only_mode else [],
+                    },
+                }
+            else:
+                validation_result = asset_validation_map.get(target_asset.id, {})
+                requirement_evaluation = evaluate_asset_against_requirements(
+                    requirements=requirements,
+                    validation_result=validation_result,
+                )
+
+            db.add(
+                SubmissionCheck(
+                    submission_id=submission.id,
+                    submission_asset_id=target_asset.id if target_asset else None,
+                    status=requirement_evaluation["status"],
+                    file_type="requirements",
+                    message=requirement_evaluation["message"],
+                    result_json=requirement_evaluation.get("result_json"),
+                )
+            )
+            db.add(
+                SubmissionCheck(
+                    submission_id=submission.id,
+                    submission_asset_id=None,
+                    status=requirement_evaluation["status"],
+                    file_type="requirements_summary",
+                    message=requirement_evaluation["message"],
+                    result_json=requirement_evaluation.get("result_json"),
+                )
+            )
+            db.commit()
         # -------------------------------------------------
         # 5. FINAL SUBMISSION STATUS
         # -------------------------------------------------
@@ -275,15 +500,58 @@ def create_submission(
             status_code=500,
             detail=f"Submission processing failed: {str(e)}",
         )
-    
+
+
+@router.get("/", response_model=list[SubmissionRead])
+def list_submissions(
+    assignment_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = db.query(Submission)
+    if assignment_id is not None:
+        query = query.filter(Submission.assignment_id == assignment_id)
+    if current_user.role == "student":
+        query = query.filter(Submission.student_id == current_user.id)
+
+    submissions = query.order_by(Submission.id.desc()).all()
+    return [to_submission_read(submission) for submission in submissions]
+
+
+@router.get("/{submission_id}/assets", response_model=list[SubmissionAssetRead])
+def list_submission_assets(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    ensure_submission_access(submission, current_user)
+
+    assets = (
+        db.query(SubmissionAsset)
+        .filter(SubmissionAsset.submission_id == submission_id)
+        .order_by(SubmissionAsset.id.asc())
+        .all()
+    )
+    return [to_submission_asset_read(asset) for asset in assets]
+
+
 @router.get("/{submission_id}/checks", response_model=list[SubmissionCheckRead])
 def list_submission_checks(
     submission_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Возвращает все checks для конкретной submission.
     """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    ensure_submission_access(submission, current_user)
+
     checks = (
         db.query(SubmissionCheck)
         .filter(SubmissionCheck.submission_id == submission_id)

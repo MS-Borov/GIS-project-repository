@@ -144,6 +144,7 @@ def extract_requirements_from_text(text: str, source_doc_name: str | None = None
     return {
         "source_doc_name": source_doc_name,
         "source_text": text,
+        "submission_format": "archive",
         "deliverable_format": deliverable_format,
         "expected_geometry_types": geometry_types,
         "expected_crs": expected_crs,

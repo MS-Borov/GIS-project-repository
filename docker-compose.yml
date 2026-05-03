@@ -104,6 +104,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -134,11 +137,14 @@ services:
       - /app/node_modules
     command: ["npm", "run", "dev", "--", "--host"]
 
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
   backend_uploads:
+
+
 
 
       

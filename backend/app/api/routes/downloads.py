@@ -5,22 +5,29 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.deps.auth import ensure_submission_access, get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.submission import Submission
+from app.models.user import User
 from app.services.storage import get_s3_client
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 
 
 @router.get("/submissions/{submission_id}")
-def download_submission(submission_id: int, db: Session = Depends(get_db)):
+def download_submission(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(
             status_code=404,
             detail=f"Submission with id={submission_id} not found in DB",
         )
+    ensure_submission_access(submission, current_user)
 
     s3 = get_s3_client()
 

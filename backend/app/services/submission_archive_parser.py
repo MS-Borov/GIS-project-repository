@@ -2,189 +2,175 @@ import io
 import zipfile
 from pathlib import Path
 
-from app.services.storage import build_shapefile_asset_zip
-from app.services.submission_validator import validate_submission_file
 
-
+SHAPEFILE_EXTENSIONS = {".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"}
 REPORT_EXTENSIONS = {".doc", ".docx", ".txt"}
-GIS_SINGLE_FILE_EXTENSIONS = {".geojson"}
+LAYER_EXTENSIONS = {".geojson"}
 
-# Служебные расширения shapefile-набора
-SHAPEFILE_PART_EXTENSIONS = {
-    ".shp",
-    ".shx",
-    ".dbf",
-    ".prj",
-    ".cpg",
-    ".sbn",
-    ".sbx",
-    ".qix",
+# Служебные файлы ArcGIS/QGIS, которые не должны становиться отдельными assets.
+# Например phlr.shp.xml — это metadata-файл, а не отдельный слой.
+IGNORED_ARCHIVE_SUFFIXES = {
+    ".shp.xml",
+    ".xml",
+    ".lock",
+    ".sr.lock",
 }
 
 
-def _build_asset(
-    asset_name: str,
-    asset_type: str,
-    detected_format: str,
-    status: str,
-    message: str,
-    file_bytes: bytes | None = None,
-    group_key: str | None = None,
-) -> dict:
+def _should_ignore_archive_file(filename: str) -> bool:
     """
-    Унифицированное представление одного asset внутри архива.
+    Проверяет, надо ли полностью игнорировать файл из архива.
+
+    Используется для служебных файлов вроде:
+    - *.shp.xml
+    - *.xml
+    - *.lock
     """
-    return {
-        "asset_name": asset_name,
-        "asset_type": asset_type,
-        "detected_format": detected_format,
-        "status": status,
-        "message": message,
-        "file_bytes": file_bytes,
-        "group_key": group_key,
-    }
+    lower_name = Path(filename).name.lower()
+    return any(lower_name.endswith(suffix) for suffix in IGNORED_ARCHIVE_SUFFIXES)
 
 
 def parse_submission_archive(file_bytes: bytes) -> list[dict]:
     """
-    Разбирает архив submission и пытается понять, что внутри:
-    - report
-    - geojson
-    - shapefile-комплекты
-    - прочие файлы
+    Разбирает submission-архив на логические assets.
 
-    На выходе — список логических assets для записи в БД.
+    Логика:
+    1. shapefile-компоненты (*.shp, *.dbf, *.shx, *.prj, ...)
+       группируются по basename в один layer asset;
+    2. каждая shapefile-группа упаковывается во внутренний zip bytes;
+    3. GeoJSON добавляется как отдельный layer asset;
+    4. DOC/DOCX/TXT добавляются как report asset;
+    5. служебные файлы игнорируются;
+    6. всё прочее попадает в other.
     """
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(file_bytes))
-    except zipfile.BadZipFile:
-        return [
-            _build_asset(
-                asset_name="archive",
-                asset_type="other",
-                detected_format="zip",
-                status="failed",
-                message="Архив не удалось открыть как корректный ZIP.",
-                file_bytes=None,
-            )
-        ]
+    result: list[dict] = []
 
-    names = [name for name in archive.namelist() if not name.endswith("/")]
-    if not names:
-        return [
-            _build_asset(
-                asset_name="archive",
-                asset_type="other",
-                detected_format="zip",
-                status="failed",
-                message="Архив пустой.",
-                file_bytes=None,
-            )
-        ]
+    with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as archive:
+        members = [m for m in archive.infolist() if not m.is_dir()]
 
-    assets: list[dict] = []
+        # Читаем все файлы архива в память.
+        all_files: dict[str, bytes] = {}
+        for member in members:
+            # Сразу пропускаем служебные metadata/lock-файлы.
+            if _should_ignore_archive_file(member.filename):
+                continue
 
-    # --------------------------
-    # 1. Ищем текстовые отчёты
-    # --------------------------
-    for name in names:
-        ext = Path(name).suffix.lower()
-        if ext in REPORT_EXTENSIONS:
-            with archive.open(name) as f:
-                data = f.read()
+            all_files[member.filename] = archive.read(member.filename)
 
-            validation = validate_submission_file(Path(name).name, data)
+        # -----------------------------
+        # 1. Группировка shapefile parts
+        # -----------------------------
+        shapefile_groups: dict[str, list[str]] = {}
+        consumed_files: set[str] = set()
 
-            assets.append(
-                _build_asset(
-                    asset_name=Path(name).name,
-                    asset_type="report",
-                    detected_format=validation["detected_format"],
-                    status=validation["status"],
-                    message=validation["message"],
-                    file_bytes=data,
-                )
-            )
+        for archive_name in all_files.keys():
+            basename = Path(archive_name).name
+            suffix = Path(basename).suffix.lower()
+            stem = Path(basename).stem.lower()
 
-    # --------------------------
-    # 2. Ищем одиночные GIS-файлы
-    # --------------------------
-    for name in names:
-        ext = Path(name).suffix.lower()
-        if ext in GIS_SINGLE_FILE_EXTENSIONS:
-            with archive.open(name) as f:
-                data = f.read()
+            if suffix in SHAPEFILE_EXTENSIONS:
+                shapefile_groups.setdefault(stem, []).append(archive_name)
 
-            validation = validate_submission_file(Path(name).name, data)
+        # -----------------------------
+        # 2. Создание shapefile layer-assets
+        # -----------------------------
+        for group_key, group_files in shapefile_groups.items():
+            suffixes = {Path(Path(name).name).suffix.lower() for name in group_files}
 
-            assets.append(
-                _build_asset(
-                    asset_name=Path(name).name,
-                    asset_type="layer",
-                    detected_format=validation["detected_format"],
-                    status=validation["status"],
-                    message=validation["message"],
-                    file_bytes=data,
-                )
-            )
+            # Настоящий shapefile layer должен содержать хотя бы .shp.
+            if ".shp" not in suffixes:
+                continue
 
-    # --------------------------
-    # 3. Группируем shapefile-наборы
-    # --------------------------
-    shapefile_groups: dict[str, list[str]] = {}
+            # Если это явно служебная/дублирующая группа, можно отфильтровать.
+            # Например dnar_prj.shp в твоём архиве выглядит как отдельный слой,
+            # но если он не нужен для expected outputs, его можно оставить как layer.
+            # Жёстко не вырезаю *_prj, потому что иногда это может быть реальный файл.
+            buffer = io.BytesIO()
 
-    for name in names:
-        path = Path(name)
-        ext = path.suffix.lower()
+            with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as layer_zip:
+                for archive_name in sorted(group_files):
+                    inner_name = Path(archive_name).name
+                    layer_zip.writestr(inner_name, all_files[archive_name])
+                    consumed_files.add(archive_name)
 
-        if ext in SHAPEFILE_PART_EXTENSIONS:
-            # Ключ группы — относительный путь без расширения
-            group_key = str(path.with_suffix("")).lower()
-            shapefile_groups.setdefault(group_key, []).append(name)
+            result.append({
+                "asset_name": f"{group_key}.zip",
+                "asset_type": "layer",
+                "detected_format": "shapefile_zip",
+                "status": "uploaded",
+                "message": f"Shapefile layer '{group_key}' собран из архива.",
+                "file_bytes": buffer.getvalue(),
+                "group_key": group_key,
+            })
 
-    for group_key, group_files in shapefile_groups.items():
-        # Нас интересуют только группы, где реально есть .shp
-        has_shp = any(Path(f).suffix.lower() == ".shp" for f in group_files)
-        if not has_shp:
-            continue
+        # -----------------------------
+        # 3. GeoJSON layers
+        # -----------------------------
+        for archive_name, data in all_files.items():
+            if archive_name in consumed_files:
+                continue
 
-        group_bytes_map: dict[str, bytes]={}
-        for original_name in group_files:
-                with archive.open(original_name) as f:
-                    group_bytes_map[Path(original_name).name] = f.read()
+            basename = Path(archive_name).name
+            suffix = Path(basename).suffix.lower()
 
-        shapefile_zip_bytes = build_shapefile_asset_zip(group_bytes_map)
+            if suffix == ".geojson":
+                result.append({
+                    "asset_name": basename,
+                    "asset_type": "layer",
+                    "detected_format": "geojson",
+                    "status": "uploaded",
+                    "message": f"GeoJSON '{basename}' найден внутри архива.",
+                    "file_bytes": data,
+                    "group_key": Path(basename).stem.lower(),
+                })
+                consumed_files.add(archive_name)
 
-        validation = validate_submission_file(
-            filename=f"{Path(group_key).name}.zip",
-            file_bytes=shapefile_zip_bytes,
-        )
+        # -----------------------------
+        # 4. Report files
+        # -----------------------------
+        for archive_name, data in all_files.items():
+            if archive_name in consumed_files:
+                continue
 
-        assets.append(
-            _build_asset(
-                asset_name=Path(group_key).name,
-                asset_type="layer",
-                detected_format=validation["detected_format"],
-                status=validation["status"],
-                message=validation["message"],
-                file_bytes=shapefile_zip_bytes,
-                group_key=group_key,
-            )
-        )
+            basename = Path(archive_name).name
+            suffix = Path(basename).suffix.lower()
 
-    # --------------------------
-    # 4. Если ничего осмысленного не нашли
-    # --------------------------
-    if not assets:
-        assets.append(
-            _build_asset(
-                asset_name="archive",
-                asset_type="other",
-                detected_format="zip",
-                status="warning",
-                message="Архив открыт, но внутри не найдено поддерживаемых отчётов или GIS-слоёв.",
-                file_bytes=None,
-            )
-        )
+            if suffix in REPORT_EXTENSIONS:
+                result.append({
+                    "asset_name": basename,
+                    "asset_type": "report",
+                    "detected_format": suffix.lstrip("."),
+                    "status": "uploaded",
+                    "message": f"Отчёт '{basename}' найден внутри архива.",
+                    "file_bytes": data,
+                    "group_key": None,
+                })
+                consumed_files.add(archive_name)
 
-    return assets
+        # -----------------------------
+        # 5. Всё остальное
+        # -----------------------------
+        for archive_name, data in all_files.items():
+            if archive_name in consumed_files:
+                continue
+
+            # Дополнительная защита: если служебный файл всё же дошёл до этого места,
+            # не создаём для него asset.
+            if _should_ignore_archive_file(archive_name):
+                consumed_files.add(archive_name)
+                continue
+
+            basename = Path(archive_name).name
+            suffix = Path(basename).suffix.lower()
+
+            result.append({
+                "asset_name": basename,
+                "asset_type": "other",
+                "detected_format": suffix.lstrip(".") if suffix else "unknown",
+                "status": "uploaded",
+                "message": f"Файл '{basename}' не был классифицирован как layer/report.",
+                "file_bytes": data,
+                "group_key": None,
+            })
+
+    return result

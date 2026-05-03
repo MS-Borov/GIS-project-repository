@@ -1,11 +1,13 @@
 from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
 
+from app.core.config import settings
+
 result_backend = RedisAsyncResultBackend(
-    redis_url="redis://redis:6379/0",
+    redis_url=settings.redis_url,
 )
 
 broker = RedisStreamBroker(
-    url="redis://redis:6379/0",
+    url=settings.redis_url,
 ).with_result_backend(result_backend)
 
 

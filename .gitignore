@@ -1,4 +1,5 @@
 .venv
+.relay-venv
 
 # Environment files
 .env

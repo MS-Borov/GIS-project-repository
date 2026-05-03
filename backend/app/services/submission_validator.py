@@ -35,6 +35,14 @@ def _build_result(
     }
 
 
+def _find_shp_files(root: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() == ".shp"
+    )
+
+
 def _validate_geojson(file_bytes: bytes) -> dict:
     """
     Проверка GeoJSON:
@@ -295,7 +303,7 @@ def _validate_shapefile_zip(file_bytes: bytes) -> dict:
             archive.extractall(tmp_dir)
 
         shp_path = None
-        for path in Path(tmp_dir).rglob("*.shp"):
+        for path in _find_shp_files(Path(tmp_dir)):
             if path.stem.lower() == selected_stem.lower():
                 shp_path = path
                 break
