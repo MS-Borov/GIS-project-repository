@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
+import io
 import logging
+import json
+import zipfile
+from pathlib import Path
+from uuid import uuid4
 
 from app.core.config import settings
 from app.api.deps.auth import ensure_submission_access, get_current_user, require_student
@@ -31,11 +36,14 @@ from app.services.storage import (
 from app.services.submission_archive_parser import parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 from app.services.asset_validator import validate_asset_from_storage
+from app.services.geojson_preview import build_geojson_preview
 from app.services.target_asset_selector import choose_target_gis_asset
 from app.services.asset_requirement_evaluator import evaluate_asset_against_requirements
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 logger = logging.getLogger(__name__)
+
+LOCAL_SHAPEFILE_EXTENSIONS = {".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"}
 
 def _asset_type_from_detected_format(detected_format: str) -> str:
     """
@@ -147,6 +155,276 @@ def to_submission_asset_read(asset: SubmissionAsset) -> SubmissionAssetRead:
         updated_at=asset.updated_at,
         download_url=f"/downloads/submission-assets/{asset.id}",
     )
+
+
+@router.post("/local-layer-preview")
+def preview_local_layer_files(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    max_features: int = Query(500, ge=1, le=1000),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Preview for locally selected GIS files.
+
+    This is intentionally separate from submission upload: selected .shp/.dbf/.shx/.prj parts
+    are grouped by basename, packed in memory as shapefile_zip, and converted to GeoJSON preview.
+    Nothing is saved as a student submission.
+    """
+    enforce_rate_limit(
+        build_rate_limit_key("local-layer-preview", get_client_ip(request), str(current_user.id)),
+        max_requests=40,
+        window_seconds=600,
+    )
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No files selected.")
+
+    grouped_files: dict[str, list[tuple[str, bytes]]] = {}
+    ignored_files: list[str] = []
+
+    for upload in files:
+        filename = Path(upload.filename or "").name
+        suffix = Path(filename).suffix.lower()
+        data = upload.file.read()
+
+        if suffix not in LOCAL_SHAPEFILE_EXTENSIONS:
+            ignored_files.append(filename)
+            continue
+
+        grouped_files.setdefault(Path(filename).stem.lower(), []).append((filename, data))
+
+    assets: list[dict] = []
+    previews: list[dict] = []
+    layer_summaries: list[dict] = []
+    warnings: list[str] = []
+    next_asset_id = 1
+
+    for group_key, group_files in sorted(grouped_files.items()):
+        suffixes = {Path(filename).suffix.lower() for filename, _ in group_files}
+        if ".shp" not in suffixes:
+            warnings.append(f"Комплект '{group_key}' пропущен: нет .shp файла.")
+            continue
+        if ".dbf" not in suffixes or ".shx" not in suffixes:
+            warnings.append(f"Комплект '{group_key}' может не открыться: обычно нужны .shp, .dbf и .shx.")
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as layer_zip:
+            for filename, data in sorted(group_files, key=lambda item: item[0].lower()):
+                layer_zip.writestr(filename, data)
+
+        asset_id = next_asset_id
+        next_asset_id += 1
+        asset_name = f"{group_key}.zip"
+        file_bytes = buffer.getvalue()
+        validation = validate_submission_file(asset_name, file_bytes)
+        details = validation.get("details", {})
+
+        asset = {
+            "id": asset_id,
+            "submission_id": 0,
+            "asset_name": asset_name,
+            "asset_type": "layer",
+            "detected_format": "shapefile_zip",
+            "status": validation.get("status", "uploaded"),
+            "message": validation.get("message") or f"Shapefile '{group_key}' собран из выбранных файлов.",
+            "download_url": None,
+            "storage_key": None,
+        }
+        assets.append(asset)
+        layer_summaries.append({
+            "asset_id": asset_id,
+            "asset_name": asset_name,
+            "detected_format": "shapefile_zip",
+            "status": validation.get("status"),
+            "message": validation.get("message"),
+            "feature_count": details.get("feature_count"),
+            "geometry_types": details.get("geometry_types", []),
+            "crs": details.get("crs"),
+            "attribute_fields": details.get("attribute_fields", []),
+            "invalid_geometry_count": details.get("invalid_geometry_count", 0),
+            "has_prj": details.get("has_prj"),
+        })
+
+        try:
+            previews.append(build_geojson_preview(
+                asset_id=asset_id,
+                asset_name=asset_name,
+                detected_format="shapefile_zip",
+                file_bytes=file_bytes,
+                max_features=max_features,
+            ))
+        except Exception as exc:
+            warnings.append(f"Не удалось построить preview слоя '{group_key}': {exc}")
+
+    if not assets:
+        raise HTTPException(
+            status_code=400,
+            detail="Не найден shapefile-комплект. Выберите .shp вместе с .dbf/.shx/.prj или загрузите ZIP/GeoJSON.",
+        )
+
+    if ignored_files:
+        warnings.append(f"Пропущены не-shapefile файлы: {', '.join(ignored_files[:8])}.")
+
+    return {
+        "preview_token": None,
+        "source_filename": "local-shapefile-files",
+        "assignment_id": 0,
+        "assets": assets,
+        "previews": previews,
+        "layer_count": len(assets),
+        "layer_summaries": layer_summaries,
+        "warnings": warnings,
+    }
+
+
+@router.post("/archive-preview")
+def preview_submission_archive_before_submit(
+    request: Request,
+    assignment_id: int = Form(...),
+    file: UploadFile = File(...),
+    max_features: int = Query(500, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_student),
+):
+    """
+    Временный preview ZIP-архива до сдачи.
+
+    Ничего не создаёт в submissions и не сохраняет файл как работу студента:
+    архив разбирается в памяти, layer assets конвертируются в GeoJSON preview.
+    """
+    enforce_rate_limit(
+        build_rate_limit_key("submission-preview", get_client_ip(request), str(current_user.id)),
+        max_requests=20,
+        window_seconds=600,
+    )
+
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    _ensure_student_can_submit_assignment(assignment, current_user, db)
+
+    file_bytes = file.file.read()
+    validation = validate_submission_file(filename=file.filename, file_bytes=file_bytes)
+    if validation["status"] == "failed":
+        raise HTTPException(status_code=400, detail=validation["message"])
+
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Предпросмотр до сдачи сейчас поддерживает ZIP-архивы.")
+
+    parsed_assets = parse_submission_archive(file_bytes)
+    assets = []
+    layer_summaries = []
+    warnings = []
+    preview_token = uuid4().hex
+
+    next_asset_id = 1
+    for parsed in parsed_assets:
+        if parsed.get("asset_type") != "layer" or parsed.get("detected_format") not in {"geojson", "shapefile_zip"}:
+            continue
+
+        asset_id = next_asset_id
+        next_asset_id += 1
+        asset_name = parsed["asset_name"]
+        detected_format = parsed["detected_format"]
+        layer_validation = validate_submission_file(asset_name, parsed["file_bytes"])
+        layer_details = layer_validation.get("details", {})
+        storage_key = f"archive-previews/{current_user.id}/{preview_token}/{asset_id}.bin"
+        upload_bytes(
+            object_key=storage_key,
+            data=parsed["file_bytes"],
+            content_type="application/octet-stream",
+        )
+
+        assets.append({
+            "id": asset_id,
+            "submission_id": 0,
+            "asset_name": asset_name,
+            "asset_type": "layer",
+            "detected_format": detected_format,
+            "status": parsed.get("status", "uploaded"),
+            "message": parsed.get("message", ""),
+            "download_url": None,
+            "storage_key": storage_key,
+        })
+        layer_summaries.append({
+            "asset_id": asset_id,
+            "asset_name": asset_name,
+            "detected_format": detected_format,
+            "status": layer_validation.get("status"),
+            "message": layer_validation.get("message"),
+            "feature_count": layer_details.get("feature_count"),
+            "geometry_types": layer_details.get("geometry_types", []),
+            "crs": layer_details.get("crs"),
+            "attribute_fields": layer_details.get("attribute_fields", []),
+            "invalid_geometry_count": layer_details.get("invalid_geometry_count", 0),
+            "has_prj": layer_details.get("has_prj"),
+        })
+
+    metadata = {
+        "preview_token": preview_token,
+        "user_id": current_user.id,
+        "source_filename": file.filename,
+        "assignment_id": assignment_id,
+        "assets": assets,
+        "layer_summaries": layer_summaries,
+    }
+    upload_bytes(
+        object_key=f"archive-previews/{current_user.id}/{preview_token}/metadata.json",
+        data=json.dumps(metadata, ensure_ascii=False).encode("utf-8"),
+        content_type="application/json",
+    )
+
+    return {
+        "preview_token": preview_token,
+        "source_filename": file.filename,
+        "assignment_id": assignment_id,
+        "assets": assets,
+        "previews": [],
+        "layer_count": len(assets),
+        "layer_summaries": layer_summaries,
+        "warnings": warnings,
+    }
+
+
+@router.get("/archive-preview/{preview_token}/assets/{asset_id}/geojson-preview")
+def preview_temporary_archive_asset_geojson(
+    preview_token: str,
+    asset_id: int,
+    max_features: int = Query(500, ge=1, le=1000),
+    current_user: User = Depends(get_current_user),
+):
+    metadata_key = f"archive-previews/{current_user.id}/{preview_token}/metadata.json"
+    s3 = get_s3_client()
+    try:
+        metadata_obj = s3.get_object(Bucket=settings.s3_bucket_name, Key=metadata_key)
+        metadata = json.loads(metadata_obj["Body"].read().decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=404, detail="Archive preview token not found or expired.")
+
+    if metadata.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Archive preview belongs to another user.")
+
+    asset = next((item for item in metadata.get("assets", []) if item.get("id") == asset_id), None)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Archive preview asset not found.")
+
+    try:
+        obj = s3.get_object(Bucket=settings.s3_bucket_name, Key=asset["storage_key"])
+        file_bytes = obj["Body"].read()
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Archive preview asset object not found: {exc}")
+
+    try:
+        return build_geojson_preview(
+            asset_id=asset["id"],
+            asset_name=asset["asset_name"],
+            detected_format=asset["detected_format"],
+            file_bytes=file_bytes,
+            max_features=max_features,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Failed to build archive asset preview: {exc}")
 
 
 
@@ -516,6 +794,19 @@ def list_submissions(
 
     submissions = query.order_by(Submission.id.desc()).all()
     return [to_submission_read(submission) for submission in submissions]
+
+
+@router.get("/{submission_id}", response_model=SubmissionRead)
+def get_submission(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    ensure_submission_access(submission, current_user)
+    return to_submission_read(submission)
 
 
 @router.get("/{submission_id}/assets", response_model=list[SubmissionAssetRead])

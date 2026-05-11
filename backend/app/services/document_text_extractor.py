@@ -80,7 +80,22 @@ def _extract_txt(file_bytes: bytes) -> str | None:
 def _extract_docx(file_bytes: bytes) -> str:
     try:
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
-            xml_bytes = archive.read("word/document.xml")
+            xml_name = _find_docx_document_xml_name(archive)
+            if not xml_name:
+                sample_names = ", ".join(archive.namelist()[:8])
+                return (
+                    "ERROR: Не удалось прочитать DOCX: файл имеет расширение .docx, "
+                    "но внутри не найден основной документ Word (word/document.xml). "
+                    "Возможно, это не настоящий DOCX, а переименованный архив/старый .doc. "
+                    f"Первые файлы внутри: {sample_names}"
+                )
+            xml_bytes = archive.read(xml_name)
+    except zipfile.BadZipFile:
+        return (
+            "ERROR: Не удалось прочитать DOCX: файл не является ZIP-пакетом Office Open XML. "
+            "Возможно, это старый .doc, переименованный в .docx. Откройте файл в Word/LibreOffice "
+            "и сохраните заново как настоящий .docx."
+        )
     except Exception as e:
         return f"ERROR: Не удалось прочитать DOCX: {str(e)}"
 
@@ -103,3 +118,35 @@ def _extract_docx(file_bytes: bytes) -> str:
         return "ERROR: DOCX прочитан, но текст не извлечён."
 
     return text
+
+
+def _find_docx_document_xml_name(archive: zipfile.ZipFile) -> str | None:
+    names = set(archive.namelist())
+    if "word/document.xml" in names:
+        return "word/document.xml"
+
+    try:
+        content_types = ET.fromstring(archive.read("[Content_Types].xml"))
+        for node in content_types:
+            part_name = node.attrib.get("PartName", "").lstrip("/")
+            content_type = node.attrib.get("ContentType", "")
+            if (
+                content_type
+                == "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
+                and part_name in names
+            ):
+                return part_name
+    except Exception:
+        pass
+
+    for name in sorted(names):
+        if not name.startswith("word/") or not name.endswith(".xml"):
+            continue
+        try:
+            xml_head = archive.read(name)[:4096].decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+        if "wordprocessingml" in xml_head and "<w:document" in xml_head:
+            return name
+
+    return None

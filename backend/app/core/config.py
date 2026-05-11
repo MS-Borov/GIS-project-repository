@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     auth_access_token_expire_minutes: int = 60 * 24
     rate_limit_enabled: bool = True
 
+    ai_digitizer_url: str = "http://ai-digitizer:8790"
+    ai_digitizer_timeout_seconds: int = 45
+
     @property
     def database_url(self) -> str:
         return (

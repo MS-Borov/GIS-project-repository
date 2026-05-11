@@ -1,15 +1,64 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps.auth import get_current_user, require_teacher
 from app.db.session import get_db
 from app.models.assignment import Assignment
+from app.models.assignment_material import AssignmentMaterial
 from app.models.course import Course, CourseMember
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead
+from app.schemas.assignment_material import AssignmentMaterialRead
+from app.services.storage import build_assignment_material_storage_key, upload_bytes
+from app.services.submission_archive_parser import parse_submission_archive
+from app.services.submission_validator import validate_submission_file
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
+
+
+def _can_manage_assignment(assignment: Assignment, user: User, db: Session) -> bool:
+    if user.role == "admin":
+        return True
+    if user.role != "teacher":
+        return False
+    if assignment.course_id is None:
+        return True
+
+    course = db.query(Course).filter(Course.id == assignment.course_id).first()
+    return bool(course and course.teacher_id == user.id)
+
+
+def _ensure_assignment_access(assignment: Assignment, user: User, db: Session) -> None:
+    if _can_manage_assignment(assignment, user, db):
+        return
+    if user.role == "student":
+        if assignment.course_id is None:
+            return
+        membership = (
+            db.query(CourseMember)
+            .filter(CourseMember.course_id == assignment.course_id, CourseMember.user_id == user.id)
+            .first()
+        )
+        if membership:
+            return
+    raise HTTPException(status_code=403, detail="Assignment access denied")
+
+
+def _to_material_read(material: AssignmentMaterial) -> AssignmentMaterialRead:
+    return AssignmentMaterialRead(
+        id=material.id,
+        assignment_id=material.assignment_id,
+        material_name=material.material_name,
+        material_type=material.material_type,
+        detected_format=material.detected_format,
+        status=material.status,
+        message=material.message,
+        storage_key=material.storage_key,
+        created_at=material.created_at,
+        updated_at=material.updated_at,
+        download_url=f"/downloads/assignment-materials/{material.id}",
+    )
 
 
 @router.get("/", response_model=list[AssignmentRead])
@@ -78,3 +127,107 @@ def create_assignment(
     db.commit()
     db.refresh(assignment)
     return assignment
+
+
+@router.get("/{assignment_id}", response_model=AssignmentRead)
+def get_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    _ensure_assignment_access(assignment, current_user, db)
+    return assignment
+
+
+@router.get("/{assignment_id}/materials", response_model=list[AssignmentMaterialRead])
+def list_assignment_materials(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    _ensure_assignment_access(assignment, current_user, db)
+
+    materials = (
+        db.query(AssignmentMaterial)
+        .filter(AssignmentMaterial.assignment_id == assignment_id)
+        .order_by(AssignmentMaterial.id.asc())
+        .all()
+    )
+    return [_to_material_read(material) for material in materials]
+
+
+@router.post("/{assignment_id}/materials", response_model=list[AssignmentMaterialRead], status_code=status.HTTP_201_CREATED)
+def upload_assignment_material(
+    assignment_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if not _can_manage_assignment(assignment, current_user, db):
+        raise HTTPException(status_code=403, detail="Assignment manager role required")
+
+    file_bytes = file.file.read()
+    validation = validate_submission_file(file.filename, file_bytes)
+    if validation["detected_format"] not in {"geojson", "shapefile_zip"}:
+        raise HTTPException(status_code=422, detail="Only GeoJSON and shapefile ZIP materials are supported for map workspace")
+
+    materials_to_create = []
+
+    if file.filename.lower().endswith(".zip"):
+        parsed_assets = parse_submission_archive(file_bytes)
+        layer_assets = [
+            asset
+            for asset in parsed_assets
+            if asset.get("asset_type") == "layer"
+            and asset.get("detected_format") in {"geojson", "shapefile_zip"}
+            and asset.get("file_bytes") is not None
+        ]
+
+        if not layer_assets:
+            raise HTTPException(status_code=422, detail="ZIP не содержит GeoJSON или shapefile-слои для карты")
+
+        for asset in layer_assets:
+            storage_key = build_assignment_material_storage_key(assignment_id, asset["asset_name"])
+            upload_bytes(storage_key, asset["file_bytes"], "application/octet-stream")
+            materials_to_create.append(
+                AssignmentMaterial(
+                    assignment_id=assignment_id,
+                    material_name=asset["asset_name"],
+                    material_type="layer",
+                    detected_format=asset["detected_format"],
+                    status=asset["status"],
+                    message=asset["message"],
+                    storage_key=storage_key,
+                )
+            )
+    else:
+        storage_key = build_assignment_material_storage_key(assignment_id, file.filename)
+        upload_bytes(storage_key, file_bytes, file.content_type or "application/octet-stream")
+        materials_to_create.append(
+            AssignmentMaterial(
+                assignment_id=assignment_id,
+                material_name=file.filename,
+                material_type="layer",
+                detected_format=validation["detected_format"],
+                status=validation["status"],
+                message=validation["message"],
+                storage_key=storage_key,
+            )
+        )
+
+    for material in materials_to_create:
+        db.add(material)
+
+    db.commit()
+    for material in materials_to_create:
+        db.refresh(material)
+    return [_to_material_read(material) for material in materials_to_create]

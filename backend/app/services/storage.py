@@ -75,6 +75,18 @@ def build_asset_storage_key(submission_id: int, asset_name: str) -> str:
     safe_name = asset_name.replace("\\", "_").replace("/", "_").replace(" ", "_")
     return f"submission-assets/{submission_id}/{uuid.uuid4().hex}_{safe_name}"
 
+def build_map_draft_storage_key(student_id: int, assignment_id: int, draft_name: str) -> str:
+    safe_name = draft_name.replace("\\", "_").replace("/", "_").replace(" ", "_")
+    return f"map-drafts/{assignment_id}/{student_id}/{uuid.uuid4().hex}_{safe_name}.geojson"
+
+def build_assignment_material_storage_key(assignment_id: int, filename: str) -> str:
+    safe_name = filename.replace("\\", "_").replace("/", "_").replace(" ", "_")
+    return f"assignment-materials/{assignment_id}/{uuid.uuid4().hex}_{safe_name}"
+
+def build_submission_storage_key(filename: str) -> str:
+    safe_name = filename.replace("\\", "_").replace("/", "_").replace(" ", "_")
+    return f"submissions/{uuid.uuid4().hex}_{safe_name}"
+
 def build_shapefile_asset_zip(group_files: dict[str, bytes]) -> str:
     """
     Собирает один shapefile asset в отдельный zip:
