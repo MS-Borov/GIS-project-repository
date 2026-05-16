@@ -21,3 +21,6 @@ cmd/server/server
 # Database
 *.db
 *.sqlite
+
+datasets/
+models/

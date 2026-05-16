@@ -36,7 +36,8 @@ from app.services.storage import (
 from app.services.submission_archive_parser import parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 from app.services.asset_validator import validate_asset_from_storage
-from app.services.geojson_preview import build_geojson_preview
+from app.services.geojson_preview import build_geojson_preview, parse_preview_bbox
+from app.services.qgis_project_parser import extract_qgis_project_metadata_from_archive
 from app.services.target_asset_selector import choose_target_gis_asset
 from app.services.asset_requirement_evaluator import evaluate_asset_against_requirements
 
@@ -44,6 +45,26 @@ router = APIRouter(prefix="/submissions", tags=["submissions"])
 logger = logging.getLogger(__name__)
 
 LOCAL_SHAPEFILE_EXTENSIONS = {".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"}
+
+
+def _extract_style_manifest_from_archive(file_bytes: bytes) -> dict | None:
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as archive:
+            manifest_name = next(
+                (
+                    member.filename
+                    for member in archive.infolist()
+                    if not member.is_dir() and Path(member.filename).name.lower() == "style-manifest.json"
+                ),
+                None,
+            )
+            if not manifest_name:
+                return None
+            manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
+            return manifest if isinstance(manifest, dict) else None
+    except Exception:
+        return None
+
 
 def _asset_type_from_detected_format(detected_format: str) -> str:
     """
@@ -162,6 +183,8 @@ def preview_local_layer_files(
     request: Request,
     files: list[UploadFile] = File(...),
     max_features: int = Query(500, ge=1, le=1000),
+    bbox: str | None = Query(None),
+    clip_boundary: str | None = Query(None),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -179,6 +202,10 @@ def preview_local_layer_files(
 
     if not files:
         raise HTTPException(status_code=400, detail="No files selected.")
+    try:
+        bbox_wgs84 = parse_preview_bbox(bbox)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     grouped_files: dict[str, list[tuple[str, bytes]]] = {}
     ignored_files: list[str] = []
@@ -253,6 +280,8 @@ def preview_local_layer_files(
                 detected_format="shapefile_zip",
                 file_bytes=file_bytes,
                 max_features=max_features,
+                bbox_wgs84=bbox_wgs84,
+                clip_boundary=clip_boundary,
             ))
         except Exception as exc:
             warnings.append(f"Не удалось построить preview слоя '{group_key}': {exc}")
@@ -313,6 +342,8 @@ def preview_submission_archive_before_submit(
         raise HTTPException(status_code=400, detail="Предпросмотр до сдачи сейчас поддерживает ZIP-архивы.")
 
     parsed_assets = parse_submission_archive(file_bytes)
+    qgis_project = extract_qgis_project_metadata_from_archive(file_bytes)
+    style_manifest = _extract_style_manifest_from_archive(file_bytes)
     assets = []
     layer_summaries = []
     warnings = []
@@ -368,6 +399,8 @@ def preview_submission_archive_before_submit(
         "assignment_id": assignment_id,
         "assets": assets,
         "layer_summaries": layer_summaries,
+        "qgis_project": qgis_project,
+        "style_manifest": style_manifest,
     }
     upload_bytes(
         object_key=f"archive-previews/{current_user.id}/{preview_token}/metadata.json",
@@ -383,6 +416,8 @@ def preview_submission_archive_before_submit(
         "previews": [],
         "layer_count": len(assets),
         "layer_summaries": layer_summaries,
+        "qgis_project": qgis_project,
+        "style_manifest": style_manifest,
         "warnings": warnings,
     }
 
@@ -392,6 +427,8 @@ def preview_temporary_archive_asset_geojson(
     preview_token: str,
     asset_id: int,
     max_features: int = Query(500, ge=1, le=1000),
+    bbox: str | None = Query(None),
+    clip_boundary: str | None = Query(None),
     current_user: User = Depends(get_current_user),
 ):
     metadata_key = f"archive-previews/{current_user.id}/{preview_token}/metadata.json"
@@ -408,6 +445,10 @@ def preview_temporary_archive_asset_geojson(
     asset = next((item for item in metadata.get("assets", []) if item.get("id") == asset_id), None)
     if not asset:
         raise HTTPException(status_code=404, detail="Archive preview asset not found.")
+    try:
+        bbox_wgs84 = parse_preview_bbox(bbox)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     try:
         obj = s3.get_object(Bucket=settings.s3_bucket_name, Key=asset["storage_key"])
@@ -422,6 +463,8 @@ def preview_temporary_archive_asset_geojson(
             detected_format=asset["detected_format"],
             file_bytes=file_bytes,
             max_features=max_features,
+            bbox_wgs84=bbox_wgs84,
+            clip_boundary=clip_boundary,
         )
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Failed to build archive asset preview: {exc}")

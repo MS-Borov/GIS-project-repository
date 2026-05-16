@@ -1,4 +1,5 @@
 from urllib.parse import quote
+import json
 
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,7 +14,7 @@ from app.models.assignment_material import AssignmentMaterial
 from app.models.course import CourseMember
 from app.models.submission_asset import SubmissionAsset
 from app.models.user import User
-from app.services.geojson_preview import build_geojson_preview
+from app.services.geojson_preview import build_geojson_preview, parse_preview_bbox
 from app.services.storage import get_s3_client
 
 router = APIRouter(prefix="/downloads", tags=["asset-downloads"])
@@ -126,6 +127,8 @@ def download_submission_asset(
 def preview_submission_asset_geojson(
     asset_id: int,
     max_features: int = 500,
+    bbox: str | None = None,
+    clip_boundary: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -153,6 +156,10 @@ def preview_submission_asset_geojson(
         max_features = 1
     if max_features > 1000:
         max_features = 1000
+    try:
+        bbox_wgs84 = parse_preview_bbox(bbox)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     s3 = get_s3_client()
 
@@ -184,6 +191,8 @@ def preview_submission_asset_geojson(
             detected_format=asset.detected_format,
             file_bytes=file_bytes,
             max_features=max_features,
+            bbox_wgs84=bbox_wgs84,
+            clip_boundary=clip_boundary,
         )
     except Exception as e:
         raise HTTPException(
@@ -196,6 +205,8 @@ def preview_submission_asset_geojson(
 def preview_assignment_material_geojson(
     material_id: int,
     max_features: int = 500,
+    bbox: str | None = None,
+    clip_boundary: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -211,6 +222,10 @@ def preview_assignment_material_geojson(
         max_features = 1
     if max_features > 1000:
         max_features = 1000
+    try:
+        bbox_wgs84 = parse_preview_bbox(bbox)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     s3 = get_s3_client()
     try:
@@ -232,6 +247,36 @@ def preview_assignment_material_geojson(
             detected_format=material.detected_format,
             file_bytes=file_bytes,
             max_features=max_features,
+            bbox_wgs84=bbox_wgs84,
+            clip_boundary=clip_boundary,
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Failed to build GeoJSON preview: {str(e)}")
+
+
+@router.get("/assignment-materials/{material_id}/qgis-project")
+def get_assignment_material_qgis_project(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    material = db.query(AssignmentMaterial).filter(AssignmentMaterial.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="AssignmentMaterial not found")
+    _ensure_assignment_material_access(material, current_user, db)
+
+    if material.detected_format != "qgis_project":
+        raise HTTPException(status_code=400, detail=f"QGIS project metadata is unavailable for format '{material.detected_format}'.")
+
+    s3 = get_s3_client()
+    try:
+        obj = s3.get_object(Bucket=settings.s3_bucket_name, Key=material.storage_key)
+        return json.loads(obj["Body"].read().decode("utf-8"))
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "unknown")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Assignment material object not found in storage. bucket={settings.s3_bucket_name}, key={material.storage_key}, code={error_code}",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read QGIS project metadata: {str(e)}")

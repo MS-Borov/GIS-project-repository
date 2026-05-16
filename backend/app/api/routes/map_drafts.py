@@ -1,8 +1,17 @@
 import json
+import re
+import tempfile
+import zipfile
+from collections import defaultdict
+from pathlib import Path
+from urllib.parse import quote
 from typing import Any
 
+import geopandas as gpd
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from shapely.geometry import shape
 from sqlalchemy.orm import Session
 
 from app.api.deps.auth import get_current_user, require_student
@@ -16,7 +25,7 @@ from app.models.submission import Submission
 from app.models.submission_asset import SubmissionAsset
 from app.models.submission_check import SubmissionCheck
 from app.models.user import User
-from app.schemas.map_draft import MapDraftCreate, MapDraftRead, MapDraftUpdate
+from app.schemas.map_draft import MapDraftCreate, MapDraftRead, MapDraftShapefileArchiveRequest, MapDraftUpdate
 from app.schemas.submission import SubmissionRead
 from app.services.asset_requirement_evaluator import evaluate_asset_against_requirements
 from app.services.asset_validator import validate_asset_from_storage
@@ -32,6 +41,156 @@ from app.services.storage import (
 )
 
 router = APIRouter(prefix="/map-drafts", tags=["map-drafts"])
+
+
+def _safe_archive_stem(value: str, fallback: str) -> str:
+    cleaned = re.sub(r"[^\wа-яА-ЯёЁ.-]+", "_", value.strip(), flags=re.UNICODE).strip("._")
+    return (cleaned or fallback)[:60]
+
+
+def _json_safe_attribute(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _feature_layer_name(feature: dict[str, Any], index: int) -> str:
+    properties = feature.get("properties") if isinstance(feature.get("properties"), dict) else {}
+    for key in ("draft_layer_name", "source_layer_name", "active_layer_name", "layer_name"):
+        value = properties.get(key)
+        if value:
+            return str(value)
+    return f"layer_{index + 1}"
+
+
+def _geometry_suffix(geometry_type: str | None) -> str:
+    value = (geometry_type or "geometry").lower()
+    if "point" in value:
+        return "points"
+    if "line" in value:
+        return "lines"
+    if "polygon" in value:
+        return "polygons"
+    return "geometry"
+
+
+def _style_manifest_layers(style_manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(style_manifest, dict):
+        return []
+    layers = style_manifest.get("layers")
+    if not isinstance(layers, list):
+        return []
+    return [layer for layer in layers if isinstance(layer, dict)]
+
+
+def _manifest_match_key(value: Any) -> str:
+    name = Path(str(value or "").replace("\\", "/")).name.lower().strip()
+    return re.sub(r"\.(zip|geojson|shp)$", "", name)
+
+
+def _find_style_manifest_layer(style_layers: list[dict[str, Any]], layer_name: str) -> dict[str, Any] | None:
+    target = _manifest_match_key(layer_name)
+    if not target:
+        return None
+    for layer in style_layers:
+        candidates = [
+            layer.get("source_layer_name"),
+            layer.get("alias"),
+            layer.get("asset_name"),
+            layer.get("export_stem"),
+        ]
+        for candidate in candidates:
+            key = _manifest_match_key(candidate)
+            if key and (key == target or target.startswith(f"{key}_") or key.startswith(f"{target}_")):
+                return layer
+    return None
+
+
+def _draft_geojson_to_shapefile_archive(
+    geojson: dict[str, Any],
+    archive_name: str,
+    style_manifest: dict[str, Any] | None = None,
+) -> bytes:
+    if geojson.get("type") != "FeatureCollection" or not isinstance(geojson.get("features"), list):
+        raise HTTPException(status_code=422, detail="Draft export expects GeoJSON FeatureCollection")
+
+    grouped_features: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    grouped_layer_names: dict[str, str] = {}
+    for index, feature in enumerate(geojson["features"]):
+        if not isinstance(feature, dict) or not feature.get("geometry"):
+            continue
+        properties = feature.get("properties") if isinstance(feature.get("properties"), dict) else {}
+        layer_name = _feature_layer_name(feature, index)
+        try:
+            geometry = shape(feature["geometry"])
+        except Exception:
+            continue
+        group_name = f"{layer_name}_{_geometry_suffix(geometry.geom_type)}"
+        grouped_layer_names.setdefault(group_name, layer_name)
+        grouped_features[group_name].append(
+            {
+                "geometry": geometry,
+                **{str(key): _json_safe_attribute(value) for key, value in properties.items()},
+            }
+        )
+
+    if not grouped_features:
+        raise HTTPException(status_code=422, detail="Draft export has no geometries")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        archive_path = tmp_path / f"{_safe_archive_stem(archive_name, 'draft_layers')}.zip"
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            used_names: set[str] = set()
+            style_layers = _style_manifest_layers(style_manifest)
+            exported_style_layers: list[dict[str, Any]] = []
+            for index, (group_name, rows) in enumerate(grouped_features.items(), start=1):
+                stem = _safe_archive_stem(group_name, f"layer_{index}")
+                base_stem = stem
+                suffix = 2
+                while stem.lower() in used_names:
+                    stem = f"{base_stem[:54]}_{suffix}"
+                    suffix += 1
+                used_names.add(stem.lower())
+
+                layer_dir = tmp_path / stem
+                layer_dir.mkdir(parents=True, exist_ok=True)
+                shp_path = layer_dir / f"{stem}.shp"
+                gdf = gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:4326")
+                try:
+                    gdf.to_file(shp_path, driver="ESRI Shapefile", encoding="UTF-8")
+                except Exception as exc:
+                    raise HTTPException(status_code=422, detail=f"Could not write shapefile '{stem}': {exc}") from exc
+
+                for layer_file in layer_dir.iterdir():
+                    if layer_file.is_file():
+                        archive.write(layer_file, arcname=f"{stem}/{layer_file.name}")
+
+                source_layer_name = grouped_layer_names.get(group_name, group_name)
+                source_style = _find_style_manifest_layer(style_layers, source_layer_name)
+                exported_style_layer = dict(source_style or {})
+                exported_style_layer.update({
+                    "source_layer_name": source_layer_name,
+                    "asset_name": f"{stem}.zip",
+                    "export_stem": stem,
+                })
+                exported_style_layers.append(exported_style_layer)
+
+            archive.writestr(
+                "style-manifest.json",
+                json.dumps(
+                    {
+                        "version": 1,
+                        "source": "gis-edu-platform",
+                        "archive_name": archive_name,
+                        "layers": exported_style_layers,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+
+        return archive_path.read_bytes()
 
 
 def _to_submission_read(submission: Submission) -> SubmissionRead:
@@ -346,6 +505,26 @@ def create_map_draft(
     db.commit()
     db.refresh(draft)
     return _to_map_draft_read(draft, include_geojson=True)
+
+
+@router.post("/export-shapefile-archive")
+def export_map_draft_shapefile_archive(
+    payload: MapDraftShapefileArchiveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_student),
+):
+    assignment = db.query(Assignment).filter(Assignment.id == payload.assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    _ensure_student_assignment_access(assignment, current_user, db)
+
+    archive_bytes = _draft_geojson_to_shapefile_archive(payload.geojson, payload.name, payload.style_manifest)
+    filename = f"{_safe_archive_stem(payload.name, 'draft_layers')}_shapefiles.zip"
+    return StreamingResponse(
+        iter([archive_bytes]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @router.get("/{draft_id}", response_model=MapDraftRead)

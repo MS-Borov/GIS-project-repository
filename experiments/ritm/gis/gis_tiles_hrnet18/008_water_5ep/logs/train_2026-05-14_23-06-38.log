@@ -1,0 +1,2452 @@
+(INFO) 2026-05-14 23:06:38: Number of GPUs: 1
+(INFO) 2026-05-14 23:06:38: Run experiment with config:
+(INFO) 2026-05-14 23:06:38: {   'CHECKPOINTS_PATH': PosixPath('../../../experiments/ritm/gis/gis_tiles_hrnet18/008_water_5ep/checkpoints'),
+    'EXPS_PATH': '../../../experiments/ritm',
+    'EXP_PATH': PosixPath('../../../experiments/ritm/gis/gis_tiles_hrnet18/008_water_5ep'),
+    'GIS_CROP_SIZE': [384, 384],
+    'GIS_MAX_POINTS': 24,
+    'GIS_MIN_COMPONENT_AREA': 30,
+    'GIS_MIN_OBJECT_AREA': 80,
+    'GIS_NUM_EPOCHS': 10,
+    'GIS_TILES_PATH': '../../../datasets/archive2_tiles_512',
+    'GIS_TRAIN_EPOCH_LEN': 2000,
+    'GIS_VAL_EPOCH_LEN': 400,
+    'IMAGENET_PRETRAINED_MODELS': {   'HRNETV2_W18': '',
+                                      'HRNETV2_W18_SMALL': '',
+                                      'HRNETV2_W32': ''},
+    'LOGS_PATH': PosixPath('../../../experiments/ritm/gis/gis_tiles_hrnet18/008_water_5ep/logs'),
+    'VIS_PATH': PosixPath('../../../experiments/ritm/gis/gis_tiles_hrnet18/008_water_5ep/vis'),
+    'batch_size': 2,
+    'device': device(type='cuda', index=0),
+    'distributed': False,
+    'exp_name': 'water_5ep',
+    'gpu_ids': [0],
+    'gpus': '0',
+    'local_rank': 0,
+    'model_path': 'models/gis/hrnet18_gis_tiles_itermask.py',
+    'multi_gpu': False,
+    'ngpus': 1,
+    'resume_exp': None,
+    'resume_prefix': 'latest',
+    'start_epoch': 0,
+    'temp_model_path': '',
+    'weights': '/models/ritm_hrnet18s.pth',
+    'workers': 2}
+(INFO) 2026-05-14 23:06:39: Dataset of 2295 samples was loaded for training.
+(INFO) 2026-05-14 23:06:39: Dataset of 280 samples was loaded for validation.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.conv3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.bn3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.bn3.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.downsample.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.downsample.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.0.downsample.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.conv3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.bn3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.1.bn3.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.conv3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.bn3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.2.bn3.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.conv3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.bn3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.layer1.3.bn3.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition1.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition1.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition1.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage2.0.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition2.2.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition2.2.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition2.2.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.0.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.1.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.2.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage3.3.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition3.3.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition3.3.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.transition3.3.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.branches.3.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.0.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.1.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.2.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.1.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.1.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.1.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.2.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.2.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.0.fuse_layers.3.2.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.branches.3.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.0.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.1.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.2.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.1.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.1.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.1.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.2.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.2.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.1.fuse_layers.3.2.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.0.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.1.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.2.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.0.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.0.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.0.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.0.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.0.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.0.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.1.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.1.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.1.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.1.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.1.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.1.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.2.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.2.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.2.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.2.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.2.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.2.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.3.conv1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.3.bn1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.3.bn1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.3.conv2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.3.bn2.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.branches.3.3.bn2.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.0.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.1.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.3.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.3.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.2.3.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.2.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.2.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.0.2.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.1.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.1.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.1.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.1.1.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.1.1.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.1.1.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.2.0.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.2.0.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.stage4.2.fuse_layers.3.2.0.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.cls_head.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.cls_head.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.aux_head.0.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.aux_head.0.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.aux_head.1.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.aux_head.1.bias" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.aux_head.3.weight" parameter.
+(INFO) 2026-05-14 23:06:39: Applied lr_mult=0.1 to "feature_extractor.aux_head.3.bias" parameter.
+(INFO) 2026-05-14 23:06:39: HRNetModel(
+  (maps_transform): Sequential(
+    (0): Conv2d(3, 16, kernel_size=(1, 1), stride=(1, 1))
+    (1): LeakyReLU(negative_slope=0.2)
+    (2): Conv2d(16, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
+    (3): ScaleLayer()
+  )
+  (dist_maps): DistMaps()
+  (feature_extractor): HighResolutionNet(
+    (conv1): Conv2d(3, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU(inplace=True)
+    (layer1): Sequential(
+      (0): BottleneckV1b(
+        (conv1): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BottleneckV1b(
+        (conv1): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+      (2): BottleneckV1b(
+        (conv1): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+      (3): BottleneckV1b(
+        (conv1): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv3): Conv2d(64, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (transition1): ModuleList(
+      (0): Sequential(
+        (0): Conv2d(256, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (2): ReLU(inplace=True)
+      )
+      (1): Sequential(
+        (0): Sequential(
+          (0): Conv2d(256, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+      )
+    )
+    (stage2): Sequential(
+      (0): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (transition2): ModuleList(
+      (0-1): 2 x None
+      (2): Sequential(
+        (0): Sequential(
+          (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+      )
+    )
+    (stage3): Sequential(
+      (0): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+      (1): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+      (2): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+      (3): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (transition3): ModuleList(
+      (0-2): 3 x None
+      (3): Sequential(
+        (0): Sequential(
+          (0): Conv2d(72, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+      )
+    )
+    (stage4): Sequential(
+      (0): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (3): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (3): Sequential(
+              (0): Conv2d(144, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (3): Sequential(
+              (0): Conv2d(144, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+            (3): Sequential(
+              (0): Conv2d(144, 72, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (3): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (2): Sequential(
+                (0): Conv2d(18, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(36, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): Sequential(
+              (0): Sequential(
+                (0): Conv2d(72, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (3): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+      (1): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (3): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (3): Sequential(
+              (0): Conv2d(144, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (3): Sequential(
+              (0): Conv2d(144, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+            (3): Sequential(
+              (0): Conv2d(144, 72, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (3): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (2): Sequential(
+                (0): Conv2d(18, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(36, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): Sequential(
+              (0): Sequential(
+                (0): Conv2d(72, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (3): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+      (2): HighResolutionModule(
+        (branches): ModuleList(
+          (0): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(18, 18, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (1): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(36, 36, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (2): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(72, 72, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+          (3): Sequential(
+            (0): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (3): BasicBlockV1b(
+              (conv1): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (conv2): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+              (bn2): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (fuse_layers): ModuleList(
+          (0): ModuleList(
+            (0): None
+            (1): Sequential(
+              (0): Conv2d(36, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (2): Sequential(
+              (0): Conv2d(72, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (3): Sequential(
+              (0): Conv2d(144, 18, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (1): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): None
+            (2): Sequential(
+              (0): Conv2d(72, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+            (3): Sequential(
+              (0): Conv2d(144, 36, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (2): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 72, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): None
+            (3): Sequential(
+              (0): Conv2d(144, 72, kernel_size=(1, 1), stride=(1, 1), bias=False)
+              (1): BatchNorm2d(72, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            )
+          )
+          (3): ModuleList(
+            (0): Sequential(
+              (0): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(18, 18, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(18, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (2): Sequential(
+                (0): Conv2d(18, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (1): Sequential(
+              (0): Sequential(
+                (0): Conv2d(36, 36, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(36, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                (2): ReLU(inplace=True)
+              )
+              (1): Sequential(
+                (0): Conv2d(36, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (2): Sequential(
+              (0): Sequential(
+                (0): Conv2d(72, 144, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+                (1): BatchNorm2d(144, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+              )
+            )
+            (3): None
+          )
+        )
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (conv3x3_ocr): Sequential(
+      (0): Conv2d(270, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (2): ReLU(inplace=True)
+    )
+    (ocr_gather_head): SpatialGather_Module()
+    (ocr_distri_head): SpatialOCR_Module(
+      (object_context_block): ObjectAttentionBlock2D(
+        (pool): MaxPool2d(kernel_size=(1, 1), stride=(1, 1), padding=0, dilation=1, ceil_mode=False)
+        (f_pixel): Sequential(
+          (0): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (1): Sequential(
+            (0): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (1): ReLU(inplace=True)
+          )
+          (2): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (3): Sequential(
+            (0): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (1): ReLU(inplace=True)
+          )
+        )
+        (f_object): Sequential(
+          (0): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (1): Sequential(
+            (0): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (1): ReLU(inplace=True)
+          )
+          (2): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (3): Sequential(
+            (0): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (1): ReLU(inplace=True)
+          )
+        )
+        (f_down): Sequential(
+          (0): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (1): Sequential(
+            (0): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (1): ReLU(inplace=True)
+          )
+        )
+        (f_up): Sequential(
+          (0): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (1): Sequential(
+            (0): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (1): ReLU(inplace=True)
+          )
+        )
+      )
+      (conv_bn_dropout): Sequential(
+        (0): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (1): Sequential(
+          (0): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (1): ReLU(inplace=True)
+        )
+        (2): Dropout2d(p=0.05, inplace=False)
+      )
+    )
+    (cls_head): Conv2d(128, 1, kernel_size=(1, 1), stride=(1, 1))
+    (aux_head): Sequential(
+      (0): Conv2d(270, 270, kernel_size=(1, 1), stride=(1, 1))
+      (1): BatchNorm2d(270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (2): ReLU(inplace=True)
+      (3): Conv2d(270, 1, kernel_size=(1, 1), stride=(1, 1))
+    )
+  )
+)
+(INFO) 2026-05-14 23:06:39: Model: isegm.model.is_hrnet_model.HRNetModel
+width                  = 18          
+ocr_width              = 64          
+with_aux_output        = True        
+use_leaky_relu         = True        
+use_rgb_conv           = False       
+use_disks              = True        
+norm_radius            = 5           
+with_prev_mask         = True        
+small                  = False        (default)
+backbone_lr_mult       = 0.1          (default)
+norm_layer             = BatchNorm2d  (default)
+cpu_dist_maps          = False        (default)
+clicks_groups          = None         (default)
+binary_prev_mask       = False        (default)
+conv_extend            = False        (default)
+norm_mean_std          = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) (default)
+
+(INFO) 2026-05-14 23:06:39: Starting Epoch: 0
+(INFO) 2026-05-14 23:06:39: Total Epochs: 5
+(INFO) 2026-05-14 23:06:39: 0%|                                                                       | 0/150 [00:00<?, ?it/s]
+(INFO) 2026-05-14 23:06:45: Epoch 0, training loss 0.4240:   0%|                                        | 0/150 [00:05<?, ?it/s]
+(INFO) 2026-05-14 23:06:51: Epoch 0, training loss 0.4782:   7%|##2                            | 11/150 [00:11<01:04,  2.16it/s]
+(INFO) 2026-05-14 23:06:56: Epoch 0, training loss 0.4455:  14%|####3                          | 21/150 [00:16<01:07,  1.90it/s]
+(INFO) 2026-05-14 23:07:01: Epoch 0, training loss 0.4228:  22%|######8                        | 33/150 [00:21<00:50,  2.33it/s]
+(INFO) 2026-05-14 23:07:06: Epoch 0, training loss 0.4072:  28%|########6                      | 42/150 [00:26<00:57,  1.87it/s]
+(INFO) 2026-05-14 23:13:50: Epoch 0, training loss 0.4437:  35%|##########9                    | 53/150 [07:10<13:08,  8.13s/it]

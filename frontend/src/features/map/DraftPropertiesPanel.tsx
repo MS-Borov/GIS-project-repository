@@ -1,0 +1,150 @@
+import type { PointerEvent as ReactPointerEvent } from "react";
+
+type DraftPropertiesPanelProps = {
+  draftId: number | null;
+  draftFeatureCount: number;
+  draftCrs: string;
+  draftName: string;
+  draftGeometryType: string;
+  detectedGeometryType: string;
+  draftColor: string;
+  draftFillOpacity: number;
+  draftSchemaFields: string[];
+  newDraftFieldName: string;
+  position: { x: number; y: number };
+  zIndex: number;
+  onFocus: () => void;
+  onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+  onClose: () => void;
+  onDraftNameChange: (value: string) => void;
+  onDraftGeometryTypeChange: (value: string) => void;
+  onDraftCrsChange: (value: string) => void;
+  onDraftColorChange: (value: string) => void;
+  onDraftFillOpacityChange: (value: number) => void;
+  onNewDraftFieldNameChange: (value: string) => void;
+  onAddDraftField: () => void;
+  onRemoveDraftField: (field: string) => void;
+  onApplyDraftFieldsToFeatures: () => void;
+};
+
+export function DraftPropertiesPanel(props: DraftPropertiesPanelProps) {
+  return (
+    <section
+      className="draft-properties-panel"
+      style={{
+        left: props.position.x,
+        top: props.position.y,
+        zIndex: props.zIndex,
+      }}
+      onPointerDown={props.onFocus}
+    >
+      <div className="layer-properties-title draggable-title" onPointerDown={props.onDragStart}>
+        <div>
+          <p className="eyebrow">Рабочий слой</p>
+          <h3>Свойства черновика</h3>
+        </div>
+        <button onClick={props.onClose} onPointerDown={(event) => event.stopPropagation()} title="Закрыть">
+          ×
+        </button>
+      </div>
+      <div className="draft-properties-summary">
+        <span>{props.draftId ? `Черновик #${props.draftId}` : "Новый черновик"}</span>
+        <span>{props.draftFeatureCount} объектов</span>
+        <span>{props.draftCrs || "СК не задана"}</span>
+      </div>
+      <div className="draft-properties-grid">
+        <label>
+          Название чернового слоя
+          <input
+            value={props.draftName}
+            onChange={(event) => props.onDraftNameChange(event.target.value)}
+            placeholder="Например: Новые объекты"
+          />
+        </label>
+        <label>
+          Тип геометрии
+          <select
+            value={props.draftGeometryType}
+            onChange={(event) => props.onDraftGeometryTypeChange(event.target.value)}
+          >
+            <option value="mixed">Авто / смешанный</option>
+            <option value="Point">Точки</option>
+            <option value="LineString">Линии</option>
+            <option value="Polygon">Полигоны</option>
+          </select>
+        </label>
+        <label>
+          Назначенная СК
+          <input
+            value={props.draftCrs}
+            onChange={(event) => props.onDraftCrsChange(event.target.value)}
+            placeholder="Например EPSG:4326"
+          />
+        </label>
+        <label>
+          Цвет легенды
+          <input type="color" value={props.draftColor} onChange={(event) => props.onDraftColorChange(event.target.value)} />
+        </label>
+        <label>
+          Заливка
+          <input
+            type="range"
+            min="0"
+            max="0.7"
+            step="0.05"
+            value={props.draftFillOpacity}
+            onChange={(event) => props.onDraftFillOpacityChange(Number(event.target.value))}
+          />
+        </label>
+      </div>
+      <div className="draft-properties-block">
+        <div className="draft-properties-block-heading">
+          <strong>Поля атрибутов</strong>
+          <button
+            onClick={props.onApplyDraftFieldsToFeatures}
+            disabled={props.draftFeatureCount === 0 || props.draftSchemaFields.length === 0}
+          >
+            Применить к объектам
+          </button>
+        </div>
+        <div className="draft-field-list">
+          {props.draftSchemaFields.length === 0 ? <span className="muted">Поля пока не заданы.</span> : null}
+          {props.draftSchemaFields.map((field) => (
+            <span className="draft-field-chip" key={field}>
+              {field}
+              <button onClick={() => props.onRemoveDraftField(field)} title={`Удалить поле ${field}`}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="draft-field-add">
+          <input
+            value={props.newDraftFieldName}
+            onChange={(event) => props.onNewDraftFieldNameChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                props.onAddDraftField();
+              }
+            }}
+            placeholder="Новое поле"
+          />
+          <button onClick={props.onAddDraftField}>Добавить поле</button>
+        </div>
+      </div>
+      <div className="draft-properties-block">
+        <strong>Легенда</strong>
+        <div className="draft-legend-row">
+          <span
+            className="draft-legend-symbol"
+            style={{ borderColor: props.draftColor, background: `${props.draftColor}33` }}
+          />
+          <strong>{props.draftName || "draft-layer"}</strong>
+          <span>{props.draftGeometryType === "mixed" ? props.detectedGeometryType : props.draftGeometryType}</span>
+          <span>{Math.round(props.draftFillOpacity * 100)}% заливки</span>
+        </div>
+      </div>
+    </section>
+  );
+}

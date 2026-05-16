@@ -248,10 +248,50 @@ h2 {
   gap: 10px;
 }
 
+.theme-icon-button {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 20px;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+}
+
+.floating-theme-button {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 1200;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 26px rgba(16, 33, 42, 0.16);
+}
+
+
+.toolbar-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .toolbar-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.classroom-sidebar > .sidebar-item:last-child {
+  display: none;
 }
 
 .user-panel div {
@@ -1800,6 +1840,10 @@ h3 {
   overflow: hidden;
 }
 
+.map-canvas-wrap {
+  position: relative;
+}
+
 .map-edit-toolbar {
   display: flex;
   align-items: center;
@@ -1813,12 +1857,17 @@ h3 {
 
 .map-edit-toolbar button {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 32px;
   padding: 0 10px;
   font-size: 13px;
+  line-height: 1;
 }
 
-.map-edit-toolbar button[data-tooltip]::after {
+.map-edit-toolbar button[data-tooltip]::after,
+.feature-table-toolbar button[data-tooltip]::after {
   position: absolute;
   z-index: 40;
   bottom: calc(100% + 8px);
@@ -1841,7 +1890,9 @@ h3 {
 }
 
 .map-edit-toolbar button[data-tooltip]:hover::after,
-.map-edit-toolbar button[data-tooltip]:focus-visible::after {
+.map-edit-toolbar button[data-tooltip]:focus-visible::after,
+.feature-table-toolbar button[data-tooltip]:hover::after,
+.feature-table-toolbar button[data-tooltip]:focus-visible::after {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
@@ -1850,6 +1901,49 @@ h3 {
   border-color: #176f6b;
   background: #e7f5f2;
   color: #105652;
+}
+
+.map-snap-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-left: 1px solid #dbe2e6;
+  border-right: 1px solid #dbe2e6;
+  padding: 0 8px;
+}
+
+.map-snap-controls button {
+  min-width: 30px;
+  padding: 0 7px;
+}
+
+.map-snap-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60717d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.map-snap-controls input {
+  width: 48px;
+  min-height: 30px;
+  text-align: center;
+}
+
+.map-basemap-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-left: 1px solid #dbe2e6;
+  border-right: 1px solid #dbe2e6;
+  padding: 0 8px;
+}
+
+.map-basemap-controls button {
+  min-width: 42px;
+  padding: 0 8px;
 }
 
 .map-edit-toolbar span {
@@ -1934,16 +2028,22 @@ h3 {
   border-radius: 8px;
   background: #fff8e1;
   padding: 10px 12px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .ai-suggestion-panel > div:first-child {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .ai-suggestion-panel span {
   color: #6b5b22;
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ai-suggestion-panel > div:last-child {
@@ -1951,6 +2051,7 @@ h3 {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: end;
+  flex: 0 0 auto;
 }
 
 .draft-properties-panel {
@@ -2154,6 +2255,146 @@ h3 {
   box-shadow: 0 14px 36px rgba(31, 45, 55, 0.2);
 }
 
+.symbol-editor-window {
+  position: fixed;
+  z-index: 14;
+  display: grid;
+  gap: 12px;
+  width: min(500px, calc(100vw - 24px));
+  max-height: min(720px, calc(100vh - 24px));
+  overflow: auto;
+  border: 1px solid #dbe2e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 18px 42px rgba(31, 45, 55, 0.24);
+}
+
+.symbol-editor-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.symbol-editor-title h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.symbol-editor-title span {
+  display: block;
+  margin-top: 3px;
+  color: #60737d;
+  font-size: 13px;
+}
+
+.symbol-editor-title button {
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  font-size: 20px;
+}
+
+.symbol-editor-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  border-block: 1px solid #e4eaed;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.symbol-editor-preview .qgis-class-symbol {
+  width: 96px;
+  height: 42px;
+}
+
+.symbol-editor-preview .qgis-class-symbol-point::before {
+  left: 39px;
+  top: 11px;
+  width: 18px;
+  height: 18px;
+}
+
+.symbol-editor-preview .qgis-class-symbol-polygon::before,
+.symbol-editor-preview .qgis-class-symbol-mixed::before {
+  left: 28px;
+  top: 8px;
+  width: 40px;
+  height: 26px;
+}
+
+.symbol-editor-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.symbol-editor-controls label {
+  display: grid;
+  gap: 5px;
+  color: #30424b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.symbol-editor-controls input,
+.symbol-editor-controls select {
+  min-height: 34px;
+}
+
+.symbol-editor-controls input[type="color"] {
+  width: 100%;
+  padding: 3px;
+}
+
+.symbol-preset-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.symbol-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px;
+}
+
+.symbol-preset-grid button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid #d6e0e5;
+  background: #ffffff;
+  color: #1f2d37;
+  text-align: left;
+  font-size: 13px;
+}
+
+.symbol-preset-grid button:hover,
+.symbol-preset-grid button.active {
+  border-color: #177d76;
+  background: #eef8f6;
+}
+
+.symbol-preset-grid button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbol-editor-actions {
+  display: flex;
+  justify-content: end;
+}
+
 .layer-properties-title {
   display: flex;
   align-items: start;
@@ -2294,6 +2535,256 @@ h3 {
   text-align: right;
 }
 
+.layer-classification-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+  border-top: 1px solid #dbe2e6;
+  padding-top: 12px;
+}
+
+.layer-classification-editor.standalone {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.layer-classification-editor label {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: #30424b;
+  font-weight: 700;
+}
+
+.layer-properties-subtitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.layer-properties-subtitle span {
+  text-align: right;
+}
+
+.classification-actions {
+  display: flex;
+  justify-content: end;
+  gap: 8px;
+}
+
+.classification-preview,
+.layer-classification-legend {
+  display: grid;
+  gap: 5px;
+}
+
+.classification-preview > strong {
+  color: #30424b;
+  font-size: 13px;
+}
+
+.classification-preview-row,
+.layer-classification-legend > span {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: #445863;
+  font-size: 12px;
+}
+
+.classification-preview-row > span,
+.layer-classification-legend i {
+  width: 14px;
+  height: 10px;
+  border: 1px solid rgba(31, 45, 55, 0.28);
+  border-radius: 2px;
+}
+
+.qgis-class-symbol {
+  --symbol-color: #176f6b;
+  --symbol-fill: rgba(23, 111, 107, 0.25);
+  position: relative;
+  display: inline-block;
+  width: 24px;
+  height: 14px;
+  color: var(--symbol-color);
+  flex: 0 0 auto;
+}
+
+.qgis-class-symbol-line::before,
+.qgis-class-symbol-dash-line::before,
+.qgis-class-symbol-dot-line::before,
+.qgis-class-symbol-river-line::before,
+.qgis-class-symbol-canal-line::before,
+.qgis-class-symbol-dry-water::before,
+.qgis-class-symbol-dirt-road::before,
+.qgis-class-symbol-local-road::before,
+.qgis-class-symbol-track-road::before,
+.qgis-class-symbol-clearing-line::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 50%;
+  border-top: 2px solid var(--symbol-color);
+  transform: translateY(-50%);
+}
+
+.qgis-class-symbol-dash-line::before,
+.qgis-class-symbol-track-road::before {
+  border-top-style: dashed;
+}
+
+.qgis-class-symbol-dot-line::before,
+.qgis-class-symbol-clearing-line::before,
+.qgis-class-symbol-dry-water::before {
+  border-top-style: dotted;
+}
+
+.qgis-class-symbol-river-line::before {
+  border-top-width: 2px;
+}
+
+.qgis-class-symbol-canal-line::before {
+  border-top-width: 1px;
+}
+
+.qgis-class-symbol-cased-road::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 5px solid #2b1b10;
+  transform: translateY(-50%);
+}
+
+.qgis-class-symbol-cased-road::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 50%;
+  border-top: 3px solid var(--symbol-color);
+  transform: translateY(-50%);
+}
+
+.qgis-class-symbol-rail::before,
+.qgis-class-symbol-rail-single::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  border-top: 2px solid var(--symbol-color);
+  border-bottom: 2px solid var(--symbol-color);
+  transform: translateY(-50%);
+}
+
+.qgis-class-symbol-rail-single::before {
+  height: 0;
+  border-bottom: 0;
+}
+
+.qgis-class-symbol-rail::after,
+.qgis-class-symbol-rail-single::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 2px;
+  bottom: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 4px,
+    var(--symbol-color) 4px 5px,
+    transparent 5px 8px
+  );
+}
+
+.qgis-class-symbol-point::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--symbol-color);
+  border-radius: 999px;
+  background: var(--symbol-fill);
+}
+
+.qgis-class-symbol-polygon::before,
+.qgis-class-symbol-mixed::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 13px;
+  height: 10px;
+  border: 1px solid var(--symbol-color);
+  border-radius: 2px;
+  background: var(--symbol-fill);
+}
+
+.qgis-class-symbol-mixed::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 50%;
+  border-top: 2px solid var(--symbol-color);
+  transform: translateY(-50%);
+}
+
+.classification-class-editor-row {
+  display: grid;
+  grid-template-columns: 26px minmax(90px, 1fr) 34px 58px 92px minmax(130px, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: #445863;
+  font-size: 12px;
+}
+
+.classification-symbol-preview {
+  width: 24px;
+  min-width: 24px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.classification-class-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classification-class-editor-row input[type="color"] {
+  width: 30px;
+  min-height: 26px;
+  padding: 2px;
+}
+
+.classification-class-editor-row input[type="number"],
+.classification-class-editor-row select {
+  min-height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.layer-classification-legend {
+  margin-left: 42px;
+  padding: 3px 0 2px;
+}
+
 .layer-properties-actions {
   display: flex;
   justify-content: end;
@@ -2406,10 +2897,14 @@ h3 {
 }
 
 .feature-table-tool-group button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   min-height: 30px;
   padding: 0;
   font-size: 16px;
+  line-height: 1;
 }
 
 .feature-table-tool-group button.active {
@@ -2552,7 +3047,14 @@ h3 {
 }
 
 .feature-table tr.multi-selected {
-  background: #edf4ff;
+  background: #fff4c7;
+  outline: 1px solid rgba(255, 176, 0, 0.55);
+}
+
+.feature-table tr.selected,
+.feature-table tr.selected.multi-selected {
+  background: #ffe8a3;
+  outline: 2px solid rgba(255, 122, 0, 0.7);
 }
 
 .feature-table tr.draft-row {
@@ -2564,9 +3066,14 @@ h3 {
 }
 
 .feature-table tr.selected td:first-child {
-  background: #dcefed;
-  color: #176f6b;
+  background: #ffd35a;
+  color: #5f3000;
   font-weight: 800;
+}
+
+.feature-table tr.selected input,
+.feature-table tr.multi-selected input {
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .feature-table-statusbar {
@@ -2849,6 +3356,11 @@ textarea.source-text {
   color: #ffffff;
 }
 
+:root[data-theme="dark"] .floating-theme-button {
+  background: rgba(18, 32, 41, 0.94);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34);
+}
+
 :root[data-theme="dark"] button.danger {
   border-color: #a76a56;
   background: #2a1814;
@@ -2916,11 +3428,23 @@ textarea.source-text {
   border-color: #304451;
 }
 
+:root[data-theme="dark"] .map-snap-controls {
+  border-color: #304451;
+}
+
+:root[data-theme="dark"] .map-basemap-controls {
+  border-color: #304451;
+}
+
 :root[data-theme="dark"] .map-coordinate-controls {
   border-color: #304451;
 }
 
 :root[data-theme="dark"] .map-scale-controls label {
+  color: #a9bcc7;
+}
+
+:root[data-theme="dark"] .map-snap-controls label {
   color: #a9bcc7;
 }
 
@@ -2949,6 +3473,7 @@ textarea.source-text {
 :root[data-theme="dark"] .layer-properties-form,
 :root[data-theme="dark"] .layer-labels-editor,
 :root[data-theme="dark"] .layer-style-editor,
+:root[data-theme="dark"] .layer-classification-editor,
 :root[data-theme="dark"] .draft-properties-block,
 :root[data-theme="dark"] .draft-extra-attributes {
   border-color: #304451;
@@ -2980,12 +3505,22 @@ textarea.source-text {
 :root[data-theme="dark"] .draft-properties-grid label,
 :root[data-theme="dark"] .draft-attribute-row label,
 :root[data-theme="dark"] .layer-style-editor label,
+:root[data-theme="dark"] .layer-classification-editor label,
 :root[data-theme="dark"] .draft-legend-row {
   color: #c8d8df;
 }
 
 :root[data-theme="dark"] .layer-style-editor span {
   color: #a9bcc7;
+}
+
+:root[data-theme="dark"] .classification-preview-row,
+:root[data-theme="dark"] .layer-classification-legend > span {
+  color: #c8d8df;
+}
+
+:root[data-theme="dark"] .classification-preview > strong {
+  color: #e7eef2;
 }
 
 :root[data-theme="dark"] .draft-properties-summary span,
@@ -3152,7 +3687,18 @@ textarea.source-text {
 
 :root[data-theme="dark"] .feature-table tr:hover,
 :root[data-theme="dark"] .feature-table tr.selected {
-  background: #123338;
+  background: #3b2b0f;
+  outline: 2px solid rgba(255, 184, 77, 0.7);
+}
+
+:root[data-theme="dark"] .feature-table tr.multi-selected {
+  background: #29304a;
+  outline: 1px solid rgba(135, 174, 255, 0.55);
+}
+
+:root[data-theme="dark"] .feature-table tr.selected.multi-selected {
+  background: #46300f;
+  outline: 2px solid rgba(255, 184, 77, 0.85);
 }
 
 :root[data-theme="dark"] .feature-table tr.draft-row {
@@ -3170,8 +3716,15 @@ textarea.source-text {
 }
 
 :root[data-theme="dark"] .feature-table tr.selected td:first-child {
-  background: #123338;
-  color: #8dd6ce;
+  background: #5c3b08;
+  color: #ffd98a;
+}
+
+:root[data-theme="dark"] .feature-table tr.selected input,
+:root[data-theme="dark"] .feature-table tr.multi-selected input {
+  background: rgba(10, 18, 24, 0.78);
+  color: #f4f8fb;
+  border-color: #6f5731;
 }
 
 :root[data-theme="dark"] .user-panel strong,
@@ -3273,4 +3826,163 @@ textarea.source-text {
   .assignment-controls input {
     width: 100%;
   }
+}
+
+.theme-icon-button {
+  font-size: 0;
+}
+
+.theme-moon-icon,
+.theme-sun-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.theme-moon-icon {
+  border-radius: 999px;
+  background: #172027;
+  box-shadow: inset -6px 0 0 #f8fbfc;
+}
+
+.theme-sun-icon {
+  border-radius: 999px;
+  border: 3px solid #f8d15c;
+}
+
+.theme-sun-icon::before,
+.theme-sun-icon::after {
+  content: "";
+  position: absolute;
+  inset: -7px 7px;
+  border-top: 3px solid #f8d15c;
+  border-bottom: 3px solid #f8d15c;
+}
+
+.theme-sun-icon::after {
+  transform: rotate(90deg);
+}
+
+.zoom-selected-button {
+  position: relative;
+  font-size: 0 !important;
+}
+
+.zoom-selected-button::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  display: block;
+}
+
+.zoom-selected-button::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 2px;
+  background: currentColor;
+  transform: translate(7px, 8px) rotate(45deg);
+  border-radius: 2px;
+}
+
+.theme-switch-button {
+  width: 56px;
+  min-width: 56px;
+  height: 32px;
+  min-height: 32px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid #9bb0bd;
+  background: #eef6f5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+}
+
+.theme-switch-button.dark {
+  justify-content: flex-end;
+  border-color: #526979;
+  background: #182a35;
+}
+
+.theme-switch-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.theme-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 1px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2px solid #167b73;
+  box-shadow: 0 2px 5px rgba(16, 33, 42, 0.18);
+  transform: translateY(-50%);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.theme-switch-button.dark .theme-switch-knob {
+  transform: translate(24px, -50%);
+  border-color: #f0c84c;
+  background: #14222c;
+}
+
+.map-toolbar-theme-switch {
+  align-self: center;
+  margin-left: 2px;
+}
+
+.zoom-selected-button {
+  position: relative;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  font-size: 0 !important;
+}
+
+.zoom-selected-button::before {
+  content: none !important;
+  display: none !important;
+}
+
+.zoom-selected-button::after {
+  content: none !important;
+  display: none !important;
+}
+
+.zoom-selected-button .zoom-to-selection-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.1;
+}
+
+.feature-table-toolbar .zoom-selected-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+}
+
+:root[data-theme="dark"] .theme-switch-button.light {
+  background: #263945;
+  border-color: #526979;
+}
+
+:root[data-theme="dark"] .theme-switch-button.light .theme-switch-knob {
+  background: #f8fbfc;
 }

@@ -1,0 +1,340 @@
+import { ZoomToSelectionIcon } from "../../shared/ui/ToolbarIcons";
+
+export type MapEditMode = "select" | "point" | "line" | "polygon" | "aiBox";
+export type MapBasemapMode = "osm" | "satellite" | "none";
+
+export type MapSnapSettings = {
+  enabled: boolean;
+  point: boolean;
+  endpoint: boolean;
+  vertex: boolean;
+  edge: boolean;
+  tolerance: number;
+};
+
+type CoordinateProjectionOption = {
+  code: string;
+  label: string;
+  definition?: string;
+};
+
+type MapToolbarProps = {
+  isDraftEditingEnabled: boolean;
+  activeEditableLayerId: number | null;
+  activeEditableLayerName: string | null;
+  activeDraftFeatureCount: number;
+  draftFeatureCount: number;
+  canEditActiveLayer: boolean;
+  hasSelectedDraftFeature: boolean;
+  hasSelectedGeoJsonFeature: boolean;
+  selectedFeatureCount: number;
+  isAiSegmenting: boolean;
+  editMode: MapEditMode;
+  snapSettings: MapSnapSettings;
+  canUndoDraft: boolean;
+  canRedoDraft: boolean;
+  canPersistDraft: boolean;
+  isDraftBusy: boolean;
+  basemapMode: MapBasemapMode;
+  mapZoom: number;
+  mapScaleText: string;
+  isRussiaExtentLocked: boolean;
+  coordinateProjection: string;
+  coordinateProjections: CoordinateProjectionOption[];
+  cursorCoordinates: string;
+  onToggleDraftEditing: () => void;
+  onContinueSelectedDraftFeatureWithAi: () => void;
+  onEditModeChange: (mode: MapEditMode) => void;
+  onZoomToSelection: () => void;
+  onDeleteSelectedDraftFeature: () => void;
+  onClearDraftLayer: () => void;
+  onToggleSnapEnabled: () => void;
+  onToggleSnapSetting: (key: "point" | "endpoint" | "vertex" | "edge") => void;
+  onSnapToleranceChange: (value: number) => void;
+  onUndoDraftChange: () => void;
+  onRedoDraftChange: () => void;
+  onToggleDraftProperties: () => void;
+  onToggleDraftTable: () => void;
+  onExportDraftLayer: () => void;
+  onExportShapefileArchive: () => void;
+  onExportMapPng: () => void;
+  onBasemapModeChange: (mode: MapBasemapMode) => void;
+  onLoadLatestDraft: () => void;
+  onSaveDraftLayer: () => void;
+  onSubmitDraftLayer: () => void;
+  onMapZoomChange: (zoom: number) => void;
+  onMapScaleTextChange: (value: string) => void;
+  onApplyMapScaleText: () => void;
+  onToggleRussiaExtentLock: () => void;
+  onCoordinateProjectionChange: (projection: string) => void;
+};
+
+export function MapToolbar(props: MapToolbarProps) {
+  const canZoomToSelection =
+    props.selectedFeatureCount > 0 || props.hasSelectedGeoJsonFeature || props.hasSelectedDraftFeature;
+
+  return (
+    <div className="map-edit-toolbar" aria-label="Инструменты редактирования">
+      <button
+        className={props.isDraftEditingEnabled ? "active" : ""}
+        onClick={props.onToggleDraftEditing}
+        title={props.isDraftEditingEnabled ? "Выключить редактирование" : "Включить редактирование"}
+        data-tooltip={props.isDraftEditingEnabled ? "Выключить редактирование" : "Включить редактирование"}
+      >
+        ✎
+      </button>
+      <button
+        onClick={props.onContinueSelectedDraftFeatureWithAi}
+        disabled={!props.canEditActiveLayer || !props.hasSelectedDraftFeature || props.isAiSegmenting}
+        title="AI продолжить выбранный объект"
+        data-tooltip="AI продолжить выбранный объект"
+      >
+        AI
+      </button>
+      <button
+        className={props.editMode === "select" ? "active" : ""}
+        onClick={() => props.onEditModeChange("select")}
+        title="Выбор объекта"
+        data-tooltip="Выбор объекта"
+      >
+        ⌖
+      </button>
+      <button
+        className={props.editMode === "point" ? "active" : ""}
+        onClick={() => props.onEditModeChange("point")}
+        disabled={!props.canEditActiveLayer}
+        title="Создать точку"
+        data-tooltip="Создать точку"
+      >
+        ●
+      </button>
+      <button
+        className={props.editMode === "line" ? "active" : ""}
+        onClick={() => props.onEditModeChange("line")}
+        disabled={!props.canEditActiveLayer}
+        title="Создать линию"
+        data-tooltip="Создать линию"
+      >
+        ╱
+      </button>
+      <button
+        className={props.editMode === "polygon" ? "active" : ""}
+        onClick={() => props.onEditModeChange("polygon")}
+        disabled={!props.canEditActiveLayer}
+        title="Создать полигон"
+        data-tooltip="Создать полигон"
+      >
+        ▱
+      </button>
+      <button
+        className="zoom-selected-button"
+        onClick={props.onZoomToSelection}
+        disabled={!canZoomToSelection}
+        title="Увеличить до выделенного объекта"
+        data-tooltip="Увеличить до выделенного объекта"
+      >
+        <ZoomToSelectionIcon />
+      </button>
+      <button
+        onClick={props.onDeleteSelectedDraftFeature}
+        disabled={!props.canEditActiveLayer}
+        title="Удалить выбранный объект"
+        data-tooltip="Удалить выбранный объект"
+      >
+        ⌫
+      </button>
+      <button
+        onClick={props.onClearDraftLayer}
+        disabled={!props.canEditActiveLayer}
+        title="Очистить черновик активного слоя"
+        data-tooltip="Очистить черновик активного слоя"
+      >
+        ×
+      </button>
+      <div className="map-snap-controls" aria-label="Параметры замыкания">
+        <button
+          className={props.snapSettings.enabled ? "active" : ""}
+          onClick={props.onToggleSnapEnabled}
+          disabled={!props.canEditActiveLayer}
+          title={props.snapSettings.enabled ? "Выключить замыкание" : "Включить замыкание"}
+          data-tooltip={props.snapSettings.enabled ? "Выключить замыкание" : "Включить замыкание"}
+        >
+          ⊙
+        </button>
+        <button
+          className={props.snapSettings.point ? "active" : ""}
+          onClick={() => props.onToggleSnapSetting("point")}
+          disabled={!props.canEditActiveLayer || !props.snapSettings.enabled}
+          title="Замыкание на точки"
+          data-tooltip="Замыкание на точки"
+        >
+          Т
+        </button>
+        <button
+          className={props.snapSettings.endpoint ? "active" : ""}
+          onClick={() => props.onToggleSnapSetting("endpoint")}
+          disabled={!props.canEditActiveLayer || !props.snapSettings.enabled}
+          title="Замыкание на конечные точки линий"
+          data-tooltip="Замыкание на конечные точки"
+        >
+          К
+        </button>
+        <button
+          className={props.snapSettings.vertex ? "active" : ""}
+          onClick={() => props.onToggleSnapSetting("vertex")}
+          disabled={!props.canEditActiveLayer || !props.snapSettings.enabled}
+          title="Замыкание на вершины"
+          data-tooltip="Замыкание на вершины"
+        >
+          В
+        </button>
+        <button
+          className={props.snapSettings.edge ? "active" : ""}
+          onClick={() => props.onToggleSnapSetting("edge")}
+          disabled={!props.canEditActiveLayer || !props.snapSettings.enabled}
+          title="Замыкание на ребро"
+          data-tooltip="Замыкание на ребро"
+        >
+          Р
+        </button>
+        <label title="Допуск замыкания в пикселях">
+          px
+          <input
+            type="number"
+            min="2"
+            max="40"
+            value={props.snapSettings.tolerance}
+            onChange={(event) => props.onSnapToleranceChange(Number(event.target.value))}
+            disabled={!props.canEditActiveLayer || !props.snapSettings.enabled}
+          />
+        </label>
+      </div>
+      <button
+        onClick={props.onUndoDraftChange}
+        disabled={!props.canUndoDraft}
+        title="Отменить изменение черновика"
+        data-tooltip="Отменить изменение черновика"
+      >
+        ↶
+      </button>
+      <button
+        onClick={props.onRedoDraftChange}
+        disabled={!props.canRedoDraft}
+        title="Вернуть изменение черновика"
+        data-tooltip="Вернуть изменение черновика"
+      >
+        ↷
+      </button>
+      <button
+        onClick={props.onToggleDraftProperties}
+        title="Свойства чернового слоя"
+        data-tooltip="Свойства чернового слоя"
+      >
+        ⚙
+      </button>
+      <button
+        onClick={props.onToggleDraftTable}
+        disabled={props.draftFeatureCount === 0}
+        title="Таблица черновика"
+        data-tooltip="Таблица черновика"
+      >
+        ▦
+      </button>
+      <button onClick={props.onExportDraftLayer} disabled={props.draftFeatureCount === 0} title="Экспортировать GeoJSON" data-tooltip="Экспортировать GeoJSON">
+        GeoJSON
+      </button>
+      <button onClick={props.onExportShapefileArchive} disabled={props.isDraftBusy} title="Экспортировать ZIP с Shapefile-слоями" data-tooltip="Экспортировать ZIP с Shapefile-слоями">
+        SHP ZIP
+      </button>
+      <button onClick={props.onExportMapPng} title="Экспортировать карту в PNG" data-tooltip="Экспортировать карту в PNG">
+        PNG
+      </button>
+      <div className="map-basemap-controls" aria-label="Подложка карты">
+        <button
+          className={props.basemapMode === "osm" ? "active" : ""}
+          onClick={() => props.onBasemapModeChange("osm")}
+          title="Подложка OpenStreetMap"
+          data-tooltip="OpenStreetMap"
+        >
+          OSM
+        </button>
+        <button
+          className={props.basemapMode === "satellite" ? "active" : ""}
+          onClick={() => props.onBasemapModeChange("satellite")}
+          title="Спутниковая подложка"
+          data-tooltip="Спутник"
+        >
+          Спутник
+        </button>
+        <button
+          className={props.basemapMode === "none" ? "active" : ""}
+          onClick={() => props.onBasemapModeChange("none")}
+          title="Отключить подложку"
+          data-tooltip="Без подложки"
+        >
+          Без
+        </button>
+      </div>
+      <button onClick={props.onLoadLatestDraft} disabled={props.isDraftBusy || !props.canPersistDraft} title="Загрузить черновик" data-tooltip="Загрузить черновик">
+        Загрузить черновик
+      </button>
+      <button onClick={props.onSaveDraftLayer} disabled={props.isDraftBusy || !props.canPersistDraft || props.draftFeatureCount === 0} title="Сохранить черновик" data-tooltip="Сохранить черновик">
+        Сохранить
+      </button>
+      <button onClick={props.onSubmitDraftLayer} disabled={props.isDraftBusy || !props.canPersistDraft || props.draftFeatureCount === 0} title="Сдать черновик" data-tooltip="Сдать черновик">
+        Сдать
+      </button>
+      <div className="map-scale-controls" aria-label="Масштаб карты">
+        <button onClick={() => props.onMapZoomChange(props.mapZoom - 1)} title="Уменьшить масштаб" data-tooltip="Уменьшить масштаб">
+          −
+        </button>
+        <label>
+          Масштаб
+          <input
+            value={props.mapScaleText}
+            onChange={(event) => props.onMapScaleTextChange(event.target.value)}
+            onBlur={props.onApplyMapScaleText}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                props.onApplyMapScaleText();
+              }
+            }}
+            placeholder="1:10000"
+          />
+        </label>
+        <button onClick={() => props.onMapZoomChange(props.mapZoom + 1)} title="Увеличить масштаб" data-tooltip="Увеличить масштаб">
+          +
+        </button>
+      </div>
+      <div className="map-coordinate-controls" aria-label="Координаты курсора">
+        <button
+          className={props.isRussiaExtentLocked ? "active" : ""}
+          onClick={props.onToggleRussiaExtentLock}
+          title={props.isRussiaExtentLocked ? "Отключить ограничение карты Россией" : "Ограничить перемещение карты Россией"}
+          data-tooltip={props.isRussiaExtentLocked ? "Отключить экстент РФ" : "Ограничить экстент РФ"}
+        >
+          РФ
+        </button>
+        <label>
+          СК
+          <select
+            value={props.coordinateProjection}
+            onChange={(event) => props.onCoordinateProjectionChange(event.target.value)}
+          >
+            {props.coordinateProjections.map((projection) => (
+              <option key={projection.code} value={projection.code}>
+                {projection.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <output>{props.cursorCoordinates}</output>
+      </div>
+      <span>
+        {props.activeEditableLayerName
+          ? `Редактируемый слой: ${props.activeEditableLayerName} · ${props.activeDraftFeatureCount}/${props.draftFeatureCount}`
+          : `Редактируемый слой не выбран · ${props.draftFeatureCount} объектов`}
+      </span>
+    </div>
+  );
+}

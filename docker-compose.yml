@@ -123,14 +123,50 @@ services:
   ai-digitizer:
     build:
       context: ./ai-digitizer-service
-      dockerfile: Dockerfile
+      dockerfile: ${AI_DIGITIZER_DOCKERFILE:-Dockerfile}
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}
     container_name: gis-ai-digitizer-dev
     restart: unless-stopped
+    gpus: all
+    environment:
+      AI_DIGITIZER_BACKEND: ${AI_DIGITIZER_BACKEND:-classical-cv}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+      SAM2_REPO_PATH: ${SAM2_REPO_PATH:-/opt/sam2}
+      SAM2_MODEL_CFG: ${SAM2_MODEL_CFG:-configs/sam2.1/sam2.1_hiera_t.yaml}
+      SAM2_CHECKPOINT: ${SAM2_CHECKPOINT:-/models/sam2.1_hiera_tiny.pt}
+      SAM2_DEVICE: ${SAM2_DEVICE:-auto}
+      SAM2_MASK_PROMPT_SIZE: ${SAM2_MASK_PROMPT_SIZE:-256}
+      PROMPT_ML_BUFFER_RATIO: ${PROMPT_ML_BUFFER_RATIO:-0.08}
+      PROMPT_ML_BUFFER_MAX_PX: ${PROMPT_ML_BUFFER_MAX_PX:-90}
+      PROMPT_ML_NEGATIVE_RING_RATIO: ${PROMPT_ML_NEGATIVE_RING_RATIO:-0.22}
+      PROMPT_ML_MAX_SAMPLES: ${PROMPT_ML_MAX_SAMPLES:-6000}
+      PROMPT_ML_POSITIVE_THRESHOLD_SCALE: ${PROMPT_ML_POSITIVE_THRESHOLD_SCALE:-1.45}
+      PROMPT_ML_NEGATIVE_MARGIN: ${PROMPT_ML_NEGATIVE_MARGIN:-0.72}
+      PROMPT_ML_MAX_AREA_RATIO: ${PROMPT_ML_MAX_AREA_RATIO:-0.82}
+      PROMPT_ML_SIMPLIFY_RATIO: ${PROMPT_ML_SIMPLIFY_RATIO:-0.0045}
+      SAM2_MAX_COARSE_AREA_RATIO: ${SAM2_MAX_COARSE_AREA_RATIO:-1.25}
+      SAM2_MIN_COARSE_IOU: ${SAM2_MIN_COARSE_IOU:-0.55}
+      SAM2_MIN_COARSE_COVERAGE: ${SAM2_MIN_COARSE_COVERAGE:-0.72}
+      WATER_UNET_CHECKPOINT: ${WATER_UNET_CHECKPOINT:-/models/water_unet.pt}
+      WATER_UNET_DEVICE: ${WATER_UNET_DEVICE:-auto}
+      WATER_UNET_THRESHOLD: ${WATER_UNET_THRESHOLD:-0.5}
+      AI_PROMPT_BUFFER_RATIO: ${AI_PROMPT_BUFFER_RATIO:-0.04}
+      AI_PROMPT_BUFFER_MAX_PX: ${AI_PROMPT_BUFFER_MAX_PX:-40}
+      AI_MIN_RESULT_PROMPT_IOU: ${AI_MIN_RESULT_PROMPT_IOU:-0.28}
+      AI_MIN_PROMPT_COVERAGE: ${AI_MIN_PROMPT_COVERAGE:-0.55}
+      AI_MAX_RESULT_PROMPT_AREA_RATIO: ${AI_MAX_RESULT_PROMPT_AREA_RATIO:-1.8}
     ports:
       - "127.0.0.1:${AI_DIGITIZER_PORT:-8790}:8790"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8790", "--reload"]
     volumes:
       - ./ai-digitizer-service:/app
+      - ./tools:/tools:ro
+      - ${AI_MODELS_DIR:-./models}:/models
+      - ${AI_DATASETS_DIR:-./datasets}:/datasets
+      - ${AI_EXPERIMENTS_DIR:-./experiments}:/experiments
+      - ${SAM2_REPO_PATH_HOST:-./ai-digitizer-service/vendor/sam2}:/opt/sam2:ro
 
   frontend:
     build:
@@ -139,15 +175,27 @@ services:
     container_name: gis-frontend-dev
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_API_URL: ${VITE_API_URL:-/api}
     depends_on:
       - backend
     volumes:
       - ./frontend:/app
       - /app/node_modules
     command: ["npm", "run", "dev", "--", "--host"]
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: gis-nginx-dev
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/conf.d/default.conf:ro
 
 
 volumes:

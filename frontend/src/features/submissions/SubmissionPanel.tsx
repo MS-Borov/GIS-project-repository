@@ -1,0 +1,366 @@
+import { useEffect, useRef } from "react";
+import Map from "ol/Map";
+import View from "ol/View";
+import GeoJSON from "ol/format/GeoJSON";
+import TileLayer from "ol/layer/Tile";
+import VectorLayer from "ol/layer/Vector";
+import OSM from "ol/source/OSM";
+import VectorSource from "ol/source/Vector";
+import { Circle as CircleStyle, Fill, Stroke, Style } from "ol/style";
+
+type Submission = {
+  id: number;
+  assignment_id: number;
+  original_filename: string;
+  status: string;
+  size_bytes: number;
+  created_at: string;
+  download_url: string;
+};
+
+type SubmissionAsset = {
+  id: number;
+  asset_name: string;
+  asset_type: string;
+  detected_format: string;
+  status: string;
+};
+
+type SubmissionCheck = {
+  id: number;
+  status: string;
+  file_type: string;
+  message: string;
+};
+
+type GeoJsonGeometry = {
+  type: string;
+  coordinates?: unknown;
+  geometries?: GeoJsonGeometry[];
+};
+
+type GeoJsonFeature = {
+  type: "Feature";
+  geometry: GeoJsonGeometry | null;
+  properties?: Record<string, unknown> | null;
+};
+
+type GeoJsonPreview = {
+  asset_id: number;
+  asset_name: string;
+  crs: string;
+  feature_count: number;
+  preview_feature_count: number;
+  truncated: boolean;
+  geojson: {
+    type: "FeatureCollection";
+    features: GeoJsonFeature[];
+  };
+};
+
+type AiReviewResponse = {
+  ai_review?: {
+    status?: string;
+    message?: string;
+    review_text?: string;
+  };
+  warnings?: string[];
+};
+
+function formatJson(value: unknown) {
+  return JSON.stringify(value, null, 2);
+}
+
+function layerDisplayName(assetName: string) {
+  return assetName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+}
+
+function mapViewerUrl(submissionId: number) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("view", "map");
+  url.searchParams.set("submission_id", String(submissionId));
+  return url.toString();
+}
+
+function openMapViewer(submissionId: number) {
+  window.open(mapViewerUrl(submissionId), "_blank", "noopener,noreferrer");
+}
+
+function statusLabel(status: string) {
+  const value = status.toLowerCase();
+  if (value === "passed") return "Пройдено";
+  if (value === "warning") return "Есть замечания";
+  if (value === "failed") return "Ошибка";
+  if (value === "uploaded") return "Загружено";
+  if (value === "unknown") return "Неизвестно";
+  return status;
+}
+
+function isPreviewableAsset(asset: SubmissionAsset) {
+  return asset.asset_type === "layer" && ["geojson", "shapefile_zip"].includes(asset.detected_format);
+}
+export function SubmissionPanel(props: {
+  submissions: Submission[];
+  selectedSubmissionId: number | null;
+  assets: SubmissionAsset[];
+  checks: SubmissionCheck[];
+  aiReview: AiReviewResponse | null;
+  mapPreview: GeoJsonPreview | null;
+  selectedMapFeatureIndex: number | null;
+  isLoading: boolean;
+  mode: "teacher" | "student";
+  onRefresh?: () => void;
+  onSubmissionSelect: (id: number) => void;
+  onGenerateAiReview: () => void;
+  onLoadAssetPreview: (assetId: number) => void;
+  onFetchAssetPreview: (assetId: number) => Promise<GeoJsonPreview>;
+  onMapFeatureSelect: (index: number | null) => void;
+  onDraftSubmitted?: (submission: Submission) => void | Promise<void>;
+}) {
+  return (
+    <section className="section-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{props.mode === "teacher" ? "Сдачи" : "Обратная связь"}</p>
+          <h2>{props.mode === "teacher" ? "Сданные работы" : "Мои сдачи"}</h2>
+        </div>
+        <div className="button-row">
+          {props.onRefresh ? (
+            <button onClick={props.onRefresh} disabled={props.isLoading}>
+              Обновить
+            </button>
+          ) : null}
+          {props.selectedSubmissionId ? (
+            <button onClick={() => openMapViewer(props.selectedSubmissionId!)} disabled={props.isLoading}>
+              Слои в новой вкладке
+            </button>
+          ) : null}
+          <button onClick={props.onGenerateAiReview} disabled={props.isLoading || !props.selectedSubmissionId}>
+            AI-review
+          </button>
+        </div>
+      </div>
+
+      <div className="submission-layout">
+        <div className="list-stack">
+          {props.submissions.length === 0 ? <p className="muted">Пока нет загруженных работ.</p> : null}
+          {props.submissions.map((submission) => (
+            <button
+              key={submission.id}
+              className={submission.id === props.selectedSubmissionId ? "list-item active" : "list-item"}
+              onClick={() => props.onSubmissionSelect(submission.id)}
+              disabled={props.isLoading}
+            >
+              <strong>{submission.original_filename}</strong>
+              <span>
+                #{submission.id} · {statusLabel(submission.status)} ·{" "}
+                {new Date(submission.created_at).toLocaleString()}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="details-panel">
+          {props.aiReview ? (
+            <div className="review-box">
+              <div className="review-heading">
+                <h3>AI-review</h3>
+                <span>{props.aiReview.ai_review?.status || "response"}</span>
+              </div>
+              <pre className="review-text">
+                {props.aiReview.ai_review?.review_text || props.aiReview.ai_review?.message || formatJson(props.aiReview)}
+              </pre>
+              {props.aiReview.warnings?.length ? (
+                <div className="warning-list">
+                  {props.aiReview.warnings.map((warning, index) => (
+                    <span key={`${warning}-${index}`}>{warning}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : props.selectedSubmissionId ? (
+            <p className="muted">AI-review ещё не запрошен для выбранной сдачи.</p>
+          ) : null}
+
+          {props.mapPreview ? (
+            <MapPreviewPanel
+              preview={props.mapPreview}
+              selectedFeatureIndex={props.selectedMapFeatureIndex}
+              onFeatureSelect={props.onMapFeatureSelect}
+            />
+          ) : null}
+
+          <h3>Файлы</h3>
+          <div className="table-like">
+            {props.assets.map((asset) => (
+              <div key={asset.id}>
+                <strong>{layerDisplayName(asset.asset_name)}</strong>
+                <span>
+                  {asset.asset_type} · {asset.detected_format} · {statusLabel(asset.status)}
+                </span>
+                {isPreviewableAsset(asset) ? (
+                  <button onClick={() => props.onLoadAssetPreview(asset.id)} disabled={props.isLoading}>
+                    {props.mapPreview?.asset_id === asset.id ? "Карта открыта" : "Карта"}
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <h3>Проверки</h3>
+          <div className="table-like">
+            {props.checks.map((check) => (
+              <div key={check.id}>
+                <strong>
+                  {check.file_type} · {statusLabel(check.status)}
+                </strong>
+                <span>{check.message}</span>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MapPreviewPanel(props: {
+  preview: GeoJsonPreview;
+  selectedFeatureIndex: number | null;
+  onFeatureSelect: (index: number | null) => void;
+}) {
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<Map | null>(null);
+  const vectorLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const selectedFeatureIndexRef = useRef<number | null>(props.selectedFeatureIndex);
+  const features = props.preview.geojson.features;
+  const selectedFeature =
+    props.selectedFeatureIndex !== null ? features[props.selectedFeatureIndex] ?? null : null;
+
+  useEffect(() => {
+    if (!mapElementRef.current) {
+      return;
+    }
+
+    const normalStyle = new Style({
+      image: new CircleStyle({
+        radius: 5,
+        fill: new Fill({ color: "rgba(23, 111, 107, 0.65)" }),
+        stroke: new Stroke({ color: "#176f6b", width: 2 }),
+      }),
+      fill: new Fill({ color: "rgba(23, 111, 107, 0.25)" }),
+      stroke: new Stroke({ color: "#176f6b", width: 2 }),
+    });
+    const selectedStyle = new Style({
+      image: new CircleStyle({
+        radius: 7,
+        fill: new Fill({ color: "rgba(199, 115, 38, 0.75)" }),
+        stroke: new Stroke({ color: "#b45f1c", width: 3 }),
+      }),
+      fill: new Fill({ color: "rgba(199, 115, 38, 0.35)" }),
+      stroke: new Stroke({ color: "#b45f1c", width: 3 }),
+    });
+
+    const vectorSource = new VectorSource({
+      features: new GeoJSON().readFeatures(props.preview.geojson, {
+        dataProjection: "EPSG:4326",
+        featureProjection: "EPSG:3857",
+      }),
+    });
+    vectorSource.getFeatures().forEach((feature, index) => {
+      feature.set("previewIndex", index);
+    });
+
+    const vectorLayer = new VectorLayer({
+      source: vectorSource,
+      style: (feature) =>
+        feature.get("previewIndex") === selectedFeatureIndexRef.current ? selectedStyle : normalStyle,
+    });
+    vectorLayerRef.current = vectorLayer;
+
+    const map = new Map({
+      target: mapElementRef.current,
+      layers: [
+        new TileLayer({
+          source: new OSM(),
+        }),
+        vectorLayer,
+      ],
+      view: new View({
+        center: [0, 0],
+        zoom: 2,
+      }),
+    });
+    mapRef.current = map;
+
+    const extent = vectorSource.getExtent();
+    if (extent && Number.isFinite(extent[0])) {
+      map.getView().fit(extent, {
+        padding: [30, 30, 30, 30],
+        maxZoom: 16,
+        duration: 200,
+      });
+    }
+
+    map.on("singleclick", (event) => {
+      const feature = map.forEachFeatureAtPixel(event.pixel, (hit) => hit);
+      const index = typeof feature?.get("previewIndex") === "number" ? feature.get("previewIndex") : null;
+      props.onFeatureSelect(index);
+    });
+
+    return () => {
+      map.setTarget(undefined);
+      mapRef.current = null;
+      vectorLayerRef.current = null;
+    };
+  }, [props.preview]);
+
+  useEffect(() => {
+    selectedFeatureIndexRef.current = props.selectedFeatureIndex;
+    vectorLayerRef.current?.changed();
+  }, [props.selectedFeatureIndex]);
+
+  return (
+    <section className="map-preview-panel">
+      <div className="map-preview-heading">
+        <div>
+          <p className="eyebrow">Предпросмотр карты</p>
+          <h3>{layerDisplayName(props.preview.asset_name)}</h3>
+        </div>
+        <span>
+          {props.preview.preview_feature_count}/{props.preview.feature_count} объектов · {props.preview.crs}
+        </span>
+      </div>
+
+      <div className="map-preview-grid">
+        <div className="map-canvas" ref={mapElementRef} />
+
+        <aside className="feature-panel">
+          <h3>Атрибуты</h3>
+          {props.preview.truncated ? (
+            <p className="muted">Preview ограничен первыми {props.preview.preview_feature_count} объектами.</p>
+          ) : null}
+          {selectedFeature ? (
+            <div className="feature-properties">
+              {Object.entries(selectedFeature.properties ?? {}).length === 0 ? (
+                <p className="muted">У объекта нет атрибутов.</p>
+              ) : null}
+              {Object.entries(selectedFeature.properties ?? {}).map(([key, value]) => (
+                <div key={key}>
+                  <strong>{key}</strong>
+                  <span>{String(value ?? "")}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">Кликните по объекту на карте.</p>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+

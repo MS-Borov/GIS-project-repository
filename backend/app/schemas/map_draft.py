@@ -17,6 +17,13 @@ class MapDraftUpdate(BaseModel):
     geojson: dict[str, Any] | None = None
 
 
+class MapDraftShapefileArchiveRequest(BaseModel):
+    assignment_id: int
+    name: str = Field(default="draft-layers", min_length=1, max_length=255)
+    geojson: dict[str, Any]
+    style_manifest: dict[str, Any] | None = None
+
+
 class MapDraftRead(BaseModel):
     id: int
     assignment_id: int

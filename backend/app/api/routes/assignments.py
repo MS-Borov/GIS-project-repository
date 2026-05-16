@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -11,10 +14,39 @@ from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead
 from app.schemas.assignment_material import AssignmentMaterialRead
 from app.services.storage import build_assignment_material_storage_key, upload_bytes
+from app.services.qgis_project_parser import extract_qgis_project_metadata_from_archive
 from app.services.submission_archive_parser import parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
+
+
+def _layer_key(value: str | None) -> str:
+    if not value:
+        return ""
+    return Path(str(value).replace("\\", "/").split("|", 1)[0]).stem.lower()
+
+
+def _filter_assets_by_qgis_project(layer_assets: list[dict], qgis_project: dict | None) -> list[dict]:
+    project_layers = qgis_project.get("layers", []) if qgis_project else []
+    project_keys = {
+        key
+        for layer in project_layers
+        for key in (
+            _layer_key(layer.get("source_basename")),
+            _layer_key(layer.get("name")),
+            _layer_key(layer.get("source")),
+        )
+        if key
+    }
+    if not project_keys:
+        return layer_assets
+    matched_assets = [
+        asset
+        for asset in layer_assets
+        if _layer_key(asset.get("group_key") or asset.get("asset_name")) in project_keys
+    ]
+    return matched_assets or layer_assets
 
 
 def _can_manage_assignment(assignment: Assignment, user: User, db: Session) -> bool:
@@ -184,6 +216,7 @@ def upload_assignment_material(
 
     if file.filename.lower().endswith(".zip"):
         parsed_assets = parse_submission_archive(file_bytes)
+        qgis_project = extract_qgis_project_metadata_from_archive(file_bytes)
         layer_assets = [
             asset
             for asset in parsed_assets
@@ -191,11 +224,17 @@ def upload_assignment_material(
             and asset.get("detected_format") in {"geojson", "shapefile_zip"}
             and asset.get("file_bytes") is not None
         ]
+        layer_assets = _filter_assets_by_qgis_project(layer_assets, qgis_project)
 
         if not layer_assets:
             raise HTTPException(status_code=422, detail="ZIP не содержит GeoJSON или shapefile-слои для карты")
 
+        seen_layer_names: set[str] = set()
         for asset in layer_assets:
+            layer_key = str(asset["asset_name"]).lower()
+            if layer_key in seen_layer_names:
+                continue
+            seen_layer_names.add(layer_key)
             storage_key = build_assignment_material_storage_key(assignment_id, asset["asset_name"])
             upload_bytes(storage_key, asset["file_bytes"], "application/octet-stream")
             materials_to_create.append(
@@ -206,6 +245,25 @@ def upload_assignment_material(
                     detected_format=asset["detected_format"],
                     status=asset["status"],
                     message=asset["message"],
+                    storage_key=storage_key,
+                )
+            )
+        if qgis_project:
+            project_name = f"{qgis_project.get('project_name') or file.filename}.qgis-project.json"
+            storage_key = build_assignment_material_storage_key(assignment_id, project_name)
+            upload_bytes(
+                storage_key,
+                json.dumps(qgis_project, ensure_ascii=False).encode("utf-8"),
+                "application/json",
+            )
+            materials_to_create.append(
+                AssignmentMaterial(
+                    assignment_id=assignment_id,
+                    material_name=project_name,
+                    material_type="qgis_project",
+                    detected_format="qgis_project",
+                    status="uploaded",
+                    message="QGIS project metadata recognized.",
                     storage_key=storage_key,
                 )
             )
@@ -225,6 +283,17 @@ def upload_assignment_material(
         )
 
     for material in materials_to_create:
+        existing_materials = (
+            db.query(AssignmentMaterial)
+            .filter(
+                AssignmentMaterial.assignment_id == assignment_id,
+                AssignmentMaterial.material_name == material.material_name,
+                AssignmentMaterial.detected_format == material.detected_format,
+            )
+            .all()
+        )
+        for existing_material in existing_materials:
+            db.delete(existing_material)
         db.add(material)
 
     db.commit()
