@@ -1,5 +1,6 @@
 .venv
 .relay-venv
+*.jpg
 
 # Environment files
 .env
@@ -24,4 +25,4 @@ cmd/server/server
 
 datasets/
 models/
-experiments/
+experiments/ritm/gis/
