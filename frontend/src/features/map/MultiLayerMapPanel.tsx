@@ -4,7 +4,15 @@ import View from "ol/View";
 import GeoJSON from "ol/format/GeoJSON";
 import type Feature from "ol/Feature";
 import type { Geometry } from "ol/geom";
+import LineString from "ol/geom/LineString";
+import type MapBrowserEvent from "ol/MapBrowserEvent";
+import MultiLineString from "ol/geom/MultiLineString";
+import MultiPoint from "ol/geom/MultiPoint";
+import MultiPolygon from "ol/geom/MultiPolygon";
+import Point from "ol/geom/Point";
+import Polygon from "ol/geom/Polygon";
 import Draw, { createBox } from "ol/interaction/Draw";
+import DragPan from "ol/interaction/DragPan";
 import Modify from "ol/interaction/Modify";
 import Select from "ol/interaction/Select";
 import Snap from "ol/interaction/Snap";
@@ -15,6 +23,7 @@ import OSM from "ol/source/OSM";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { transform, transformExtent } from "ol/proj";
+import { getLength } from "ol/sphere";
 import { Circle as CircleStyle, Fill, Stroke, Style } from "ol/style";
 import { featureSelectionKey } from "./selection";
 import type { SelectedLayerFeature, ZoomSelectionTarget } from "./selection";
@@ -29,10 +38,11 @@ import {
 } from "./layerStyles";
 import type { GeoJsonFeature, GeoJsonGeometry, GeoJsonPreview, LayerPreviewState, LayerStyleSettings } from "./layerStyles";
 import { DraftFeatureTable, GisFeatureTable } from "../feature-table/FeatureTables";
+import type { AttributeFieldType } from "../feature-table/FeatureTables";
 import { DraftPropertiesPanel } from "./DraftPropertiesPanel";
 import { MapToolbar } from "./MapToolbar";
 
-type EditMode = "select" | "point" | "line" | "polygon" | "aiBox";
+type EditMode = "select" | "point" | "line" | "polygon" | "aiBox" | "measure";
 
 type BasemapMode = "osm" | "satellite" | "none";
 
@@ -78,6 +88,7 @@ type DraftHistorySnapshot = {
     features: GeoJsonFeature[];
   };
   draftFieldsText: string;
+  draftFieldTypes: Record<string, AttributeFieldType>;
   draftName: string;
   draftGeometryType: string;
   draftCrs: string;
@@ -116,6 +127,7 @@ type MapDraft = {
       source_layer_count?: number;
       draft_feature_count?: number;
       fields?: string[];
+      field_types?: Record<string, AttributeFieldType>;
       style?: {
         color?: string;
         fill_opacity?: number;
@@ -132,10 +144,14 @@ type AiSegmentBoxResponse = {
   meta?: Record<string, unknown>;
 };
 
+type AiTargetSemanticType = "water" | "forest";
+
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "/api";
 
 const AUTH_STORAGE_KEY = "gis_edu_auth";
+
+const LEGACY_DRAFT_DEFAULT_FIELDS = new Set(["name", "description"]);
 
 const RUSSIA_VIEW_EXTENT_LONLAT = [5, 34, 190, 86];
 
@@ -172,6 +188,49 @@ const LINE_VERTEX_SNAP_SEGMENTERS: Segmenters = {
   GeometryCollection: null,
   MultiPoint: null,
 };
+
+function isBlankAttributeValue(value: unknown) {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+function isLegacyDraftDefaultField(field: string) {
+  return LEGACY_DRAFT_DEFAULT_FIELDS.has(field.trim().toLowerCase());
+}
+
+function hasNonBlankFeatureValue(features: Feature<Geometry>[], field: string) {
+  return features.some((feature) => !isBlankAttributeValue(feature.get(field)));
+}
+
+function visibleDraftSchemaFieldsForFeatures(fields: string[], features: Feature<Geometry>[]) {
+  return fields.filter((field) => !isLegacyDraftDefaultField(field) || hasNonBlankFeatureValue(features, field));
+}
+
+function pruneBlankLegacyDraftFields(features: Feature<Geometry>[]) {
+  features.forEach((feature) => {
+    LEGACY_DRAFT_DEFAULT_FIELDS.forEach((field) => {
+      if (isBlankAttributeValue(feature.get(field))) {
+        feature.unset(field, true);
+      }
+    });
+  });
+}
+
+function mapPointerButton(event: MapBrowserEvent) {
+  const originalEvent = event.originalEvent;
+  return originalEvent instanceof MouseEvent || originalEvent instanceof PointerEvent ? originalEvent.button : 0;
+}
+
+function primaryMapButton(event: MapBrowserEvent) {
+  return mapPointerButton(event) === 0;
+}
+
+function middleMapButton(event: MapBrowserEvent) {
+  return mapPointerButton(event) === 1;
+}
+
+function secondaryMapButton(event: MapBrowserEvent) {
+  return mapPointerButton(event) === 2;
+}
 
 function layerDisplayName(assetName: string) {
   return assetName.replace(/\.(zip|geojson|shp)$/i, "");
@@ -244,6 +303,135 @@ function featureSelectionScore(feature: Feature<Geometry>, order: number) {
   return (priority[type] ?? 3) * 1_000_000_000_000 + area + order * 0.0001;
 }
 
+function squaredDistanceToSegment(point: number[], start: number[], end: number[]) {
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  if (dx === 0 && dy === 0) {
+    return (point[0] - start[0]) ** 2 + (point[1] - start[1]) ** 2;
+  }
+  const ratio = Math.max(0, Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / (dx * dx + dy * dy)));
+  const closestX = start[0] + ratio * dx;
+  const closestY = start[1] + ratio * dy;
+  return (point[0] - closestX) ** 2 + (point[1] - closestY) ** 2;
+}
+
+function squaredDistanceToLineCoordinates(point: number[], coordinates: number[][]) {
+  if (coordinates.length === 0) {
+    return Infinity;
+  }
+  if (coordinates.length === 1) {
+    return (point[0] - coordinates[0][0]) ** 2 + (point[1] - coordinates[0][1]) ** 2;
+  }
+  return coordinates.slice(1).reduce((minimum, coordinate, index) => {
+    const previous = coordinates[index];
+    return Math.min(minimum, squaredDistanceToSegment(point, previous, coordinate));
+  }, Infinity);
+}
+
+function squaredDistanceToLineGeometry(point: number[], geometry: Geometry | undefined) {
+  if (geometry instanceof LineString) {
+    return squaredDistanceToLineCoordinates(point, geometry.getCoordinates());
+  }
+  if (geometry instanceof MultiLineString) {
+    return geometry
+      .getCoordinates()
+      .reduce((minimum, coordinates) => Math.min(minimum, squaredDistanceToLineCoordinates(point, coordinates)), Infinity);
+  }
+  return Infinity;
+}
+
+function coordinatesMatch(left: number[], right: number[]) {
+  return left.length >= 2 && right.length >= 2 && left[0] === right[0] && left[1] === right[1];
+}
+
+function ringVertexCoordinates(ring: number[][]) {
+  if (ring.length > 1 && coordinatesMatch(ring[0], ring[ring.length - 1])) {
+    return ring.slice(0, -1);
+  }
+  return ring;
+}
+
+function geometryVertexCoordinates(geometry: Geometry | undefined): number[][] {
+  if (!geometry) {
+    return [];
+  }
+  if (geometry instanceof Point) {
+    return [geometry.getCoordinates()];
+  }
+  if (geometry instanceof MultiPoint) {
+    return geometry.getCoordinates();
+  }
+  if (geometry instanceof LineString) {
+    return geometry.getCoordinates();
+  }
+  if (geometry instanceof MultiLineString) {
+    return geometry.getCoordinates().flat();
+  }
+  if (geometry instanceof Polygon) {
+    return geometry.getCoordinates().flatMap(ringVertexCoordinates);
+  }
+  if (geometry instanceof MultiPolygon) {
+    return geometry.getCoordinates().flatMap((polygon) => polygon.flatMap(ringVertexCoordinates));
+  }
+  return [];
+}
+
+function asStyleArray(styles: Style | Style[]) {
+  return Array.isArray(styles) ? styles : [styles];
+}
+
+function selectedVertexStyle(feature: Feature<Geometry>) {
+  const coordinates = geometryVertexCoordinates(feature.getGeometry());
+  if (coordinates.length === 0) {
+    return null;
+  }
+
+  return new Style({
+    geometry: new MultiPoint(coordinates),
+    image: new CircleStyle({
+      radius: 5,
+      fill: new Fill({ color: "#f8fafc" }),
+      stroke: new Stroke({ color: "#0f766e", width: 2 }),
+    }),
+  });
+}
+
+function selectedFeatureOverlayStyles(feature: Feature<Geometry>) {
+  const styles: Style[] = [
+    new Style({
+      image: new CircleStyle({
+        radius: 9,
+        fill: new Fill({ color: "rgba(255, 255, 255, 0.12)" }),
+        stroke: new Stroke({ color: "#0f766e", width: 2, lineDash: [7, 4] }),
+      }),
+      fill: new Fill({ color: "rgba(15, 118, 110, 0.04)" }),
+      stroke: new Stroke({ color: "#0f766e", width: 2, lineDash: [7, 4] }),
+    }),
+  ];
+  const vertexStyle = selectedVertexStyle(feature);
+  if (vertexStyle) {
+    styles.push(vertexStyle);
+  }
+  return styles;
+}
+
+function transparentDraftPreviewStyles(featureStyle: LayerStyleSettings) {
+  const strokeColor = colorWithOpacity(featureStyle.strokeColor, 0.35);
+  return new Style({
+    image: new CircleStyle({
+      radius: featureStyle.pointRadius,
+      fill: new Fill({ color: colorWithOpacity(featureStyle.fillColor, 0.14) }),
+      stroke: new Stroke({ color: strokeColor, width: Math.max(1, featureStyle.strokeWidth) }),
+    }),
+    fill: new Fill({ color: colorWithOpacity(featureStyle.fillColor, 0.1) }),
+    stroke: new Stroke({
+      color: strokeColor,
+      width: Math.max(1, featureStyle.strokeWidth),
+      lineDash: [8, 5],
+    }),
+  });
+}
+
 function zoomToScaleDenominator(zoom: number) {
   return Math.max(1, Math.round(591657550.5 / 2 ** zoom));
 }
@@ -260,6 +448,16 @@ function parseMapScale(value: string) {
   const normalized = value.replace(/\s/g, "").replace(/^1[:/]/i, "");
   const denominator = Number(normalized.replace(",", "."));
   return Number.isFinite(denominator) && denominator > 0 ? denominator : null;
+}
+
+function formatDistanceMeters(distance: number) {
+  if (!Number.isFinite(distance)) {
+    return "0 м";
+  }
+  if (distance >= 1000) {
+    return `${(distance / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} км`;
+  }
+  return `${distance.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} м`;
 }
 
 function transformCoordinateSafe(
@@ -319,6 +517,17 @@ function formatMapCoordinate(
   }
 }
 
+type RestoredDraftLayer = {
+  assetId: number;
+  name: string;
+  groupName?: string | null;
+  style?: Partial<LayerStyleSettings> | null;
+  fieldTypes?: Record<string, AttributeFieldType>;
+  fields?: string[];
+  geometryType?: string | null;
+  crs?: string | null;
+};
+
 export function MultiLayerMapPanel(props: {
   layers: LayerPreviewState[];
   layerStyles: Record<number, LayerStyleSettings>;
@@ -328,16 +537,22 @@ export function MultiLayerMapPanel(props: {
   autoLoadDraft?: boolean;
   isDraftEditingEnabled: boolean;
   onDraftEditingEnabledChange: (enabled: boolean) => void;
+  onRequestSelectedLayerEditing?: () => void | Promise<void>;
+  selectedLayerForEditingId?: number | null;
+  selectedLayerForEditingName?: string | null;
+  onRestoreDraftLayers?: (layers: RestoredDraftLayer[]) => void;
   zoomToLayerId: number | null;
   zoomToLayerTick: number;
   tableLayerId: number | null;
   layerAliases: Record<number, string>;
+  layerGroups?: Record<number, string>;
   isTableWindowOpen: boolean;
   selectedFeature: SelectedLayerFeature;
   onFeatureSelect: (feature: SelectedLayerFeature) => void;
   onLayerFeatureAttributeChange: (assetId: number, featureIndex: number, field: string, value: string) => void;
   onLayerAttributeFieldAdd: (assetId: number, field: string) => void;
   onLayerAttributeFieldRemove: (assetId: number, field: string) => void;
+  removedLayerIds?: number[];
   windowZIndexes: Record<MapWindowKey, number>;
   onWindowFocus: (windowKey: MapWindowKey) => void;
   onCloseTable: () => void;
@@ -353,12 +568,20 @@ export function MultiLayerMapPanel(props: {
   const selectedFeatureRef = useRef<SelectedLayerFeature>(props.selectedFeature);
   const selectedFeatureKeysRef = useRef<Set<string>>(new Set());
   const vectorLayerRefs = useRef<VectorLayer<VectorSource>[]>([]);
+  const basemapLayerRef = useRef<TileLayer<OSM | XYZ> | null>(null);
+  const draftLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const aiSuggestionLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const measureLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const mapLayerSourcesRef = useRef<VectorSource[]>([]);
   const draftSourceRef = useRef(new VectorSource());
+  const measureSourceRef = useRef(new VectorSource());
   const drawInteractionRef = useRef<Draw | null>(null);
   const mapViewStateRef = useRef<MapViewState | null>(null);
   const coordinateProjectionRef = useRef<CoordinateProjectionCode>("EPSG:4326");
   const mapProjectionRef = useRef<CoordinateProjectionCode>("EPSG:4326");
+  const editModeRef = useRef<EditMode>("select");
   const lastFitKeyRef = useRef<string | null>(null);
+  const lastZoomToLayerTickRef = useRef(props.zoomToLayerTick);
   const autoLoadedDraftRef = useRef(false);
   const selectedDraftFeatureRef = useRef<Feature<Geometry> | null>(null);
   const justDrawnDraftFeaturesRef = useRef(new WeakSet<Feature<Geometry>>());
@@ -380,8 +603,9 @@ export function MultiLayerMapPanel(props: {
   const [editMode, setEditMode] = useState<EditMode>("select");
   const [mapZoom, setMapZoom] = useState(mapViewStateRef.current?.zoom ?? 2);
   const [mapScaleText, setMapScaleText] = useState(formatMapScale(mapViewStateRef.current?.zoom ?? 2));
+  const [measureDistanceText, setMeasureDistanceText] = useState("");
   const [coordinateProjection, setCoordinateProjection] = useState<CoordinateProjectionCode>("EPSG:4326");
-  const [isRussiaExtentLocked, setIsRussiaExtentLocked] = useState(true);
+  const [isRussiaExtentLocked, setIsRussiaExtentLocked] = useState(false);
   const [basemapMode, setBasemapMode] = useState<BasemapMode>(props.hideBasemap ? "none" : "osm");
   const isBasemapVisible = basemapMode !== "none";
   const [cursorCoordinates, setCursorCoordinates] = useState("—");
@@ -391,7 +615,8 @@ export function MultiLayerMapPanel(props: {
   const [draftName, setDraftName] = useState("draft-layer");
   const [draftGeometryType, setDraftGeometryType] = useState("mixed");
   const [draftCrs, setDraftCrs] = useState("EPSG:4326");
-  const [draftFieldsText, setDraftFieldsText] = useState("name\ndescription");
+  const [draftFieldsText, setDraftFieldsText] = useState("");
+  const [draftFieldTypes, setDraftFieldTypes] = useState<Record<string, AttributeFieldType>>({});
   const [draftColor, setDraftColor] = useState("#d83f3f");
   const [draftFillOpacity, setDraftFillOpacity] = useState(0.2);
   const [draftStatus, setDraftStatus] = useState("Черновик не сохранён.");
@@ -403,6 +628,7 @@ export function MultiLayerMapPanel(props: {
     confidence: number;
     message: string;
   } | null>(null);
+  const aiSuggestionRef = useRef<typeof aiSuggestion>(null);
   const [isDraftPropertiesOpen, setIsDraftPropertiesOpen] = useState(false);
   const [isDraftTableOpen, setIsDraftTableOpen] = useState(false);
   const [selectedFeatureKeys, setSelectedFeatureKeys] = useState<Set<string>>(new Set());
@@ -410,6 +636,7 @@ export function MultiLayerMapPanel(props: {
   const [attributeKey, setAttributeKey] = useState("");
   const [attributeValue, setAttributeValue] = useState("");
   const mapProjection = coordinateProjection;
+  const removedLayerKey = (props.removedLayerIds ?? []).join(",");
   const visibleLayers = props.layers.filter((layer) => layer.visible);
   const canPersistDraft = Boolean(props.allowDraftSubmit) && storedUserRole() === "student" && Boolean(props.assignmentId);
   const canEditActiveLayer = props.isDraftEditingEnabled && props.activeEditableLayerId !== null;
@@ -449,10 +676,17 @@ export function MultiLayerMapPanel(props: {
         .getFeatures()
         .filter((feature) => feature.get("draft_layer_asset_id") === tableLayer.asset.id)
     : [];
+
   useEffect(() => {
     selectedFeatureRef.current = props.selectedFeature;
     vectorLayerRefs.current.forEach((layer) => layer.changed());
   }, [props.selectedFeature]);
+
+  useEffect(() => {
+    aiSuggestionRef.current = aiSuggestion;
+    aiSuggestion?.targetFeature.changed();
+    draftLayerRef.current?.changed();
+  }, [aiSuggestion]);
 
   useEffect(() => {
     selectedFeatureKeysRef.current = selectedFeatureKeys;
@@ -460,7 +694,7 @@ export function MultiLayerMapPanel(props: {
   }, [selectedFeatureKeys]);
 
   useEffect(() => {
-    if (!props.isDraftEditingEnabled && editMode !== "select") {
+    if (!props.isDraftEditingEnabled && editMode !== "select" && editMode !== "measure") {
       setEditMode("select");
     }
   }, [props.isDraftEditingEnabled, editMode]);
@@ -468,6 +702,32 @@ export function MultiLayerMapPanel(props: {
   useEffect(() => {
     coordinateProjectionRef.current = coordinateProjection;
   }, [coordinateProjection]);
+
+  useEffect(() => {
+    editModeRef.current = editMode;
+  }, [editMode]);
+
+  useEffect(() => {
+    const removedIds = new Set(props.removedLayerIds ?? []);
+    if (removedIds.size === 0) {
+      return;
+    }
+    let removedDraftFeature = false;
+    draftSourceRef.current.getFeatures().forEach((feature) => {
+      const layerAssetId = Number(feature.get("draft_layer_asset_id"));
+      if (Number.isFinite(layerAssetId) && removedIds.has(layerAssetId)) {
+        if (selectedDraftFeatureRef.current === feature) {
+          selectedDraftFeatureRef.current = null;
+        }
+        draftSourceRef.current.removeFeature(feature);
+        removedDraftFeature = true;
+      }
+    });
+    if (removedDraftFeature) {
+      setDraftRevision((revision) => revision + 1);
+      draftLayerRef.current?.changed();
+    }
+  }, [removedLayerKey]);
 
   useEffect(() => {
     const previousProjection = mapProjectionRef.current;
@@ -493,7 +753,7 @@ export function MultiLayerMapPanel(props: {
       }
     }
     mapProjectionRef.current = mapProjection;
-    setCursorCoordinates("вЂ”");
+    setCursorCoordinates("—");
     setDraftRevision((revision) => revision + 1);
   }, [mapProjection]);
 
@@ -520,14 +780,45 @@ export function MultiLayerMapPanel(props: {
   }, []);
 
   function draftFields() {
+    const currentFeatures = draftSourceRef.current.getFeatures();
     return Array.from(
       new Set(
         draftFieldsText
           .split(/[\n,;]+/)
           .map((field) => field.trim())
-          .filter(Boolean),
+          .filter(Boolean)
+          .filter((field) => !isLegacyDraftDefaultField(field) || hasNonBlankFeatureValue(currentFeatures, field)),
       ),
     );
+  }
+
+  function fieldType(field: string): AttributeFieldType {
+    return draftFieldTypes[field] ?? "text";
+  }
+
+  function defaultValueForFieldType(type: AttributeFieldType) {
+    if (type === "boolean") {
+      return false;
+    }
+    return "";
+  }
+
+  function coerceAttributeValue(value: string, type: AttributeFieldType) {
+    if (value === "") {
+      return "";
+    }
+    if (type === "number") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : value;
+    }
+    if (type === "integer") {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : value;
+    }
+    if (type === "boolean") {
+      return value === "true" || value === "1" || value === "yes" || value === "on";
+    }
+    return value;
   }
 
   function captureDraftSnapshot(): DraftHistorySnapshot {
@@ -538,6 +829,7 @@ export function MultiLayerMapPanel(props: {
     return {
       geojson,
       draftFieldsText,
+      draftFieldTypes,
       draftName,
       draftGeometryType,
       draftCrs,
@@ -559,8 +851,11 @@ export function MultiLayerMapPanel(props: {
   }
 
   function clearAiSuggestion() {
+    const targetFeature = aiSuggestionRef.current?.targetFeature;
     aiSuggestionSourceRef.current.clear();
     setAiSuggestion(null);
+    targetFeature?.changed();
+    draftLayerRef.current?.changed();
   }
 
   function restoreDraftSnapshot(snapshot: DraftHistorySnapshot, status: string) {
@@ -572,6 +867,7 @@ export function MultiLayerMapPanel(props: {
     draftSourceRef.current.addFeatures(features);
     selectedDraftFeatureRef.current = null;
     setDraftFieldsText(snapshot.draftFieldsText);
+    setDraftFieldTypes(snapshot.draftFieldTypes);
     setDraftName(snapshot.draftName);
     setDraftGeometryType(snapshot.draftGeometryType);
     setDraftCrs(snapshot.draftCrs);
@@ -622,15 +918,55 @@ export function MultiLayerMapPanel(props: {
     }
     Array.from(new Set([...draftFields(), ...layerSchemaFields])).forEach((field) => {
       if (feature.get(field) === undefined) {
-        feature.set(field, "");
+        feature.set(field, defaultValueForFieldType(fieldType(field)));
       }
     });
   }
 
   function setDraftFields(fields: string[]) {
-    setDraftFieldsText(
-      Array.from(new Set(fields.map((field) => field.trim()).filter(Boolean))).join("\n"),
-    );
+    const nextFields = Array.from(new Set(fields.map((field) => field.trim()).filter(Boolean)));
+    setDraftFieldsText(nextFields.join("\n"));
+    setDraftFieldTypes((current) => {
+      const next: Record<string, AttributeFieldType> = {};
+      nextFields.forEach((field) => {
+        next[field] = current[field] ?? "text";
+      });
+      return next;
+    });
+  }
+
+  function setDraftFieldType(field: string, type: AttributeFieldType) {
+    const normalizedField = field.trim();
+    if (!normalizedField) {
+      return;
+    }
+    rememberDraftState();
+    setDraftFieldTypes((current) => ({ ...current, [normalizedField]: type }));
+    draftSourceRef.current.getFeatures().forEach((feature) => {
+      feature.set(normalizedField, coerceAttributeValue(String(feature.get(normalizedField) ?? ""), type));
+    });
+    setDraftStatus(`Тип поля «${normalizedField}» изменён.`);
+    setDraftRevision((revision) => revision + 1);
+  }
+
+  function addDraftFieldWithType(fieldName: string, type: AttributeFieldType) {
+    const field = fieldName.trim();
+    if (!field) {
+      return;
+    }
+    const currentFields = draftFields();
+    rememberDraftState();
+    if (!currentFields.includes(field)) {
+      setDraftFields([...currentFields, field]);
+    }
+    setDraftFieldTypes((current) => ({ ...current, [field]: type }));
+    draftSourceRef.current.getFeatures().forEach((feature) => {
+      if (feature.get(field) === undefined) {
+        feature.set(field, defaultValueForFieldType(type));
+      }
+    });
+    setDraftStatus(`Поле «${field}» (${type}) добавлено в схему слоя.`);
+    setDraftRevision((revision) => revision + 1);
   }
 
   function addDraftField() {
@@ -646,7 +982,7 @@ export function MultiLayerMapPanel(props: {
     setDraftFields([...draftFields(), field]);
     draftSourceRef.current.getFeatures().forEach((feature) => {
       if (feature.get(field) === undefined) {
-        feature.set(field, "");
+        feature.set(field, defaultValueForFieldType(fieldType(field)));
       }
     });
     setNewDraftFieldName("");
@@ -663,7 +999,7 @@ export function MultiLayerMapPanel(props: {
     setDraftFields([...draftFields(), field]);
     draftSourceRef.current.getFeatures().forEach((feature) => {
       if (feature.get(field) === undefined) {
-        feature.set(field, "");
+        feature.set(field, defaultValueForFieldType(fieldType(field)));
       }
     });
     setDraftStatus(`Поле «${field}» добавлено в схему слоя.`);
@@ -673,6 +1009,11 @@ export function MultiLayerMapPanel(props: {
   function removeDraftField(field: string) {
     rememberDraftState();
     setDraftFields(draftFields().filter((item) => item !== field));
+    setDraftFieldTypes((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
     draftSourceRef.current.getFeatures().forEach((feature) => {
       feature.unset(field);
     });
@@ -758,6 +1099,25 @@ export function MultiLayerMapPanel(props: {
     };
   }
 
+  async function captureCleanMapImageDataForAi(map: Map) {
+    const hiddenLayers = [...vectorLayerRefs.current, draftLayerRef.current, aiSuggestionLayerRef.current].filter(
+      (layer): layer is VectorLayer<VectorSource> => Boolean(layer),
+    );
+    const previousVisibility = hiddenLayers.map((layer) => layer.getVisible());
+    hiddenLayers.forEach((layer) => layer.setVisible(false));
+
+    try {
+      await new Promise<void>((resolve) => {
+        map.once("rendercomplete", () => resolve());
+        map.renderSync();
+      });
+      return captureMapImageData(map);
+    } finally {
+      hiddenLayers.forEach((layer, index) => layer.setVisible(previousVisibility[index] ?? true));
+      map.renderSync();
+    }
+  }
+
   async function requestAiSegmentBox(boxFeature: Feature<Geometry>) {
     const map = mapRef.current;
     const geometry = boxFeature.getGeometry();
@@ -789,11 +1149,7 @@ export function MultiLayerMapPanel(props: {
     setIsAiSegmenting(true);
     setDraftStatus("AI-контур: отправляю фрагмент карты в сервис...");
     try {
-      await new Promise<void>((resolve) => {
-        map.once("rendercomplete", () => resolve());
-        map.renderSync();
-      });
-      const capture = captureMapImageData(map);
+      const capture = await captureCleanMapImageDataForAi(map);
       const result = await storedAuthFetchJson<AiSegmentBoxResponse>("/map-assistant/segment-box", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -803,9 +1159,16 @@ export function MultiLayerMapPanel(props: {
           image_size: capture.imageSize.map((value) => Math.round(value)),
           image_extent: capture.imageExtent,
           bbox_pixels: bboxPixels,
+          target_layer_name: props.activeEditableLayerName,
+          target_semantic_type: aiTargetSemanticType(),
           target_geometry_type: "polygon",
         }),
       });
+      if (result.status !== "passed") {
+        clearAiSuggestion();
+        setDraftStatus(`AI-контур не добавлен: ${result.message} Confidence: ${Math.round(result.confidence * 100)}%.`);
+        return;
+      }
 
       const feature = new GeoJSON().readFeature(
         {
@@ -845,6 +1208,17 @@ export function MultiLayerMapPanel(props: {
       return "point";
     }
     return "polygon";
+  }
+
+  function aiTargetSemanticType(): AiTargetSemanticType | undefined {
+    const layerName = (props.activeEditableLayerName ?? "").toLowerCase();
+    if (/(hydro|water|river|lake|pond|reservoir|гидр|вод|рек|озер|озёр|пруд)/i.test(layerName)) {
+      return "water";
+    }
+    if (/(forest|wood|woods|tree|trees|vegetation|landuse_forest|natural_wood|les|лес|леса|лесн|древ|растит)/i.test(layerName)) {
+      return "forest";
+    }
+    return undefined;
   }
 
   function paddedPixelBboxForGeometry(map: Map, geometry: Geometry, size: number[]) {
@@ -900,11 +1274,7 @@ export function MultiLayerMapPanel(props: {
     setIsAiSegmenting(true);
     setDraftStatus("AI-продолжение: анализирую выбранный объект...");
     try {
-      await new Promise<void>((resolve) => {
-        map.once("rendercomplete", () => resolve());
-        map.renderSync();
-      });
-      const capture = captureMapImageData(map);
+      const capture = await captureCleanMapImageDataForAi(map);
       const promptGeometry = new GeoJSON().writeGeometryObject(geometry, {
         dataProjection: mapProjection,
         featureProjection: mapProjection,
@@ -919,9 +1289,16 @@ export function MultiLayerMapPanel(props: {
           image_extent: capture.imageExtent,
           bbox_pixels: bboxPixels,
           prompt_geometry: promptGeometry,
+          target_layer_name: props.activeEditableLayerName,
+          target_semantic_type: aiTargetSemanticType(),
           target_geometry_type: targetGeometryType,
         }),
       });
+      if (result.status !== "passed") {
+        clearAiSuggestion();
+        setDraftStatus(`AI не смог надежно улучшить контур: ${result.message} Confidence: ${Math.round(result.confidence * 100)}%.`);
+        return;
+      }
 
       const suggestedFeature = new GeoJSON().readFeature(
         {
@@ -1080,7 +1457,7 @@ export function MultiLayerMapPanel(props: {
       return;
     }
     rememberDraftState();
-    selectedDraftFeature.set(normalizedKey, value);
+    selectedDraftFeature.set(normalizedKey, coerceAttributeValue(value, fieldType(normalizedKey)));
     setAttributeKey("");
     setAttributeValue("");
     setDraftRevision((revision) => revision + 1);
@@ -1100,8 +1477,12 @@ export function MultiLayerMapPanel(props: {
     if (!feature) {
       return;
     }
+    const previousFeature = selectedDraftFeatureRef.current;
     justDrawnDraftFeaturesRef.current.delete(feature);
     selectedDraftFeatureRef.current = feature;
+    previousFeature?.changed();
+    feature.changed();
+    draftLayerRef.current?.changed();
     setDraftRevision((revision) => revision + 1);
   }
 
@@ -1111,15 +1492,19 @@ export function MultiLayerMapPanel(props: {
       return;
     }
     rememberDraftState();
-    feature.set(key.trim(), value);
+    feature.set(key.trim(), coerceAttributeValue(value, fieldType(key.trim())));
     selectedDraftFeatureRef.current = feature;
     setDraftRevision((revision) => revision + 1);
   }
 
   function selectDraftFeature(feature: Feature<Geometry>) {
+    const previousFeature = selectedDraftFeatureRef.current;
     justDrawnDraftFeaturesRef.current.delete(feature);
     selectedDraftFeatureRef.current = feature;
     props.onFeatureSelect(null);
+    previousFeature?.changed();
+    feature.changed();
+    draftLayerRef.current?.changed();
     setDraftRevision((revision) => revision + 1);
   }
 
@@ -1128,7 +1513,7 @@ export function MultiLayerMapPanel(props: {
       return;
     }
     rememberDraftState();
-    feature.set(key.trim(), value);
+    feature.set(key.trim(), coerceAttributeValue(value, fieldType(key.trim())));
     selectedDraftFeatureRef.current = feature;
     setDraftRevision((revision) => revision + 1);
   }
@@ -1296,6 +1681,7 @@ export function MultiLayerMapPanel(props: {
 
   function buildDraftGeoJsonObject() {
     const features = buildCompleteDraftFeatures();
+    const styleManifest = buildLayerStyleManifest();
     const geojson = new GeoJSON().writeFeaturesObject(features, {
       dataProjection: "EPSG:4326",
       featureProjection: mapProjection,
@@ -1311,7 +1697,9 @@ export function MultiLayerMapPanel(props: {
         includes_base_layers: true,
         source_layer_count: props.layers.length,
         draft_feature_count: draftSourceRef.current.getFeatures().length,
+        style_manifest: styleManifest,
         fields: draftFields(),
+        field_types: draftFieldTypes,
         style: {
           color: draftColor,
           fill_opacity: draftFillOpacity,
@@ -1330,34 +1718,67 @@ export function MultiLayerMapPanel(props: {
           source_layer_name: layerDisplayName(layer.asset.asset_name),
           asset_name: layer.asset.asset_name,
           alias,
+          group_name: props.layerGroups?.[layer.asset.id] ?? null,
           style: normalizeLayerStyle(props.layerStyles[layer.asset.id], index),
         };
       }),
     };
   }
 
-  function exportDraftLayer() {
-    const geojson = buildDraftGeoJsonObject();
-    const features = geojson.features;
-    if (features.length === 0) {
+  function restoreMissingDraftLayersFromGeoJson(
+    geojson: { type: "FeatureCollection"; features: GeoJsonFeature[]; properties?: Record<string, any> },
+  ) {
+    if (!props.onRestoreDraftLayers) {
       return;
     }
 
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], {
-      type: "application/geo+json",
+    const loadedLayerIds = new Set(props.layers.map((layer) => layer.asset.id));
+    const styleManifest = geojson.properties?.style_manifest;
+    const styleLayers = Array.isArray(styleManifest?.layers) ? styleManifest.layers : [];
+    const fields = Array.isArray(geojson.properties?.fields)
+      ? geojson.properties.fields.filter((field: unknown) => typeof field === "string")
+      : [];
+    const fieldTypes =
+      typeof geojson.properties?.field_types === "object" && geojson.properties?.field_types
+        ? geojson.properties.field_types
+        : {};
+    const restoredLayers: RestoredDraftLayer[] = [];
+    const restoredIds = new Set<number>();
+
+    geojson.features.forEach((feature) => {
+      const properties = feature.properties ?? {};
+      const layerAssetId = Number(properties.draft_layer_asset_id);
+      if (!Number.isFinite(layerAssetId) || loadedLayerIds.has(layerAssetId) || restoredIds.has(layerAssetId)) {
+        return;
+      }
+      const layerName =
+        typeof properties.draft_layer_name === "string" && properties.draft_layer_name.trim()
+          ? properties.draft_layer_name.trim()
+          : `layer-${layerAssetId}`;
+      const manifestLayer =
+        styleLayers.find((layer: any) => Number(layer?.source_layer_id) === layerAssetId) ??
+        styleLayers.find((layer: any) => layer?.source_layer_name === layerName || layer?.alias === layerName);
+      restoredIds.add(layerAssetId);
+      restoredLayers.push({
+        assetId: layerAssetId,
+        name: layerName,
+        groupName: manifestLayer?.group_name ?? null,
+        style: manifestLayer?.style ?? null,
+        fields,
+        fieldTypes,
+        geometryType: geojson.properties?.geometry_type ?? null,
+        crs: geojson.properties?.assigned_crs ?? null,
+      });
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${props.activeEditableLayerName || draftName || "layer"}.geojson`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setDraftStatus(`GeoJSON экспортирован: ${features.length} объектов.`);
+
+    if (restoredLayers.length > 0) {
+      props.onRestoreDraftLayers(restoredLayers);
+    }
   }
 
   async function exportShapefileArchive() {
     if (!props.assignmentId) {
-      setDraftStatus("Нельзя экспортировать Shapefile ZIP: assignment_id неизвестен.");
+      setDraftStatus("Нельзя экспортировать архив: assignment_id неизвестен.");
       return;
     }
     const geojson = buildDraftGeoJsonObject();
@@ -1383,18 +1804,18 @@ export function MultiLayerMapPanel(props: {
       });
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`Shapefile ZIP export вернул ${response.status}: ${text}`);
+        throw new Error(`Экспорт архива вернул ${response.status}: ${text}`);
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${draftName.trim() || "draft-layers"}_shapefiles.zip`;
+      link.download = `${draftName.trim() || "draft-layers"}_archive.zip`;
       link.click();
       URL.revokeObjectURL(url);
-      setDraftStatus(`SHP ZIP экспортирован: ${geojson.features.length} объектов.`);
+      setDraftStatus(`Архив работы экспортирован: ${geojson.features.length} объектов.`);
     } catch (error) {
-      setDraftStatus(error instanceof Error ? error.message : "Не удалось экспортировать SHP ZIP.");
+      setDraftStatus(error instanceof Error ? error.message : "Не удалось экспортировать архив работы.");
     } finally {
       setIsDraftBusy(false);
     }
@@ -1457,6 +1878,7 @@ export function MultiLayerMapPanel(props: {
         return;
       }
 
+      restoreMissingDraftLayersFromGeoJson(draft.geojson);
       const loadedFeatures = new GeoJSON().readFeatures(draft.geojson, {
         dataProjection: "EPSG:4326",
         featureProjection: mapProjection,
@@ -1464,6 +1886,11 @@ export function MultiLayerMapPanel(props: {
       const features = draft.geojson.properties?.includes_base_layers
         ? loadedFeatures.filter((feature) => feature.get("draft_feature") === true || feature.get("draft_layer_asset_id"))
         : loadedFeatures;
+      pruneBlankLegacyDraftFields(features);
+      const loadedFields = visibleDraftSchemaFieldsForFeatures(draft.geojson.properties?.fields ?? [], features);
+      const loadedFieldTypes = Object.fromEntries(
+        Object.entries(draft.geojson.properties?.field_types ?? {}).filter(([field]) => loadedFields.includes(field)),
+      );
       draftSourceRef.current.clear();
       draftSourceRef.current.addFeatures(features);
       selectedDraftFeatureRef.current = null;
@@ -1472,7 +1899,8 @@ export function MultiLayerMapPanel(props: {
       setDraftName(draft.geojson.properties?.layer_name || draft.name);
       setDraftGeometryType(draft.geojson.properties?.geometry_type || draft.geometry_type || "mixed");
       setDraftCrs(draft.geojson.properties?.assigned_crs || "EPSG:4326");
-      setDraftFieldsText((draft.geojson.properties?.fields ?? ["name", "description"]).join("\n"));
+      setDraftFieldsText(loadedFields.join("\n"));
+      setDraftFieldTypes(loadedFieldTypes);
       setDraftColor(draft.geojson.properties?.style?.color || "#d83f3f");
       setDraftFillOpacity(draft.geojson.properties?.style?.fill_opacity ?? 0.2);
       setDraftRevision((value) => value + 1);
@@ -1660,35 +2088,40 @@ export function MultiLayerMapPanel(props: {
                 selected.featureIndex === feature.get("featureIndex"));
             const labelValue =
               layer.labelsVisible && layer.labelField ? feature.get(layer.labelField) : null;
-            return featureMapStyles(featureStyle, { selected: isSelected, labelValue });
+            const baseStyles = featureMapStyles(featureStyle, { selected: false, labelValue });
+            return isSelected
+              ? [...asStyleArray(baseStyles), ...selectedFeatureOverlayStyles(feature as Feature<Geometry>)]
+              : baseStyles;
           },
         });
         vectorLayerRefs.current.push(vectorLayer);
         return { assetId: layer.asset.id, vectorLayer, vectorSource };
       });
+    mapLayerSourcesRef.current = mapLayers.map((layer) => layer.vectorSource);
 
     const savedViewState = mapViewStateRef.current;
     const savedCenter =
       savedViewState?.center && savedViewState.projection !== mapProjection
         ? transformCoordinateSafe(savedViewState.center, savedViewState.projection, mapProjection)
         : savedViewState?.center;
+    const basemapLayer =
+      basemapMode === "none"
+        ? null
+        : new TileLayer({
+            source:
+              basemapMode === "satellite"
+                ? new XYZ({
+                    url: SATELLITE_TILE_URL,
+                    crossOrigin: "anonymous",
+                    maxZoom: 19,
+                  })
+                : new OSM({ crossOrigin: "anonymous" }),
+          });
+    basemapLayerRef.current = basemapLayer;
     const map = new Map({
       target: mapElementRef.current,
       layers: [
-        ...(basemapMode === "none"
-          ? []
-          : [
-              new TileLayer({
-                source:
-                  basemapMode === "satellite"
-                    ? new XYZ({
-                        url: SATELLITE_TILE_URL,
-                        crossOrigin: "anonymous",
-                        maxZoom: 19,
-                      })
-                    : new OSM({ crossOrigin: "anonymous" }),
-              }),
-            ]),
+        ...(basemapLayer ? [basemapLayer] : []),
         ...mapLayers.map((layer) => layer.vectorLayer),
       ],
       view: new View({
@@ -1698,6 +2131,8 @@ export function MultiLayerMapPanel(props: {
         extent: isRussiaExtentLocked ? russiaViewExtentForProjection(mapProjection) : undefined,
       }),
     });
+    const middleButtonDragPan = new DragPan({ condition: middleMapButton });
+    map.addInteraction(middleButtonDragPan);
     mapRef.current = map;
     setMapZoom(map.getView().getZoom() ?? 2);
     setMapScaleText(formatMapScale(map.getView().getZoom() ?? 2));
@@ -1719,13 +2154,18 @@ export function MultiLayerMapPanel(props: {
     };
     map.getViewport().addEventListener("mouseleave", handleMapMouseLeave);
 
+    const visibleLayerIdSet = new Set(visibleLayers.map((layer) => layer.asset.id));
+    const loadedLayerIdSet = new Set(props.layers.map((layer) => layer.asset.id));
     const draftLayer = new VectorLayer({
       source: draftSourceRef.current,
       style: (feature) => {
         const isSelected = feature === selectedDraftFeatureRef.current;
-        const useSelectionStyle = isSelected && !justDrawnDraftFeaturesRef.current.has(feature as Feature<Geometry>);
         const layerAssetId = Number(feature.get("draft_layer_asset_id"));
+        if (Number.isFinite(layerAssetId) && loadedLayerIdSet.has(layerAssetId) && !visibleLayerIdSet.has(layerAssetId)) {
+          return [];
+        }
         const sourceLayerIndex = props.layers.findIndex((layer) => layer.asset.id === layerAssetId);
+        const sourceLayer = sourceLayerIndex >= 0 ? props.layers[sourceLayerIndex] : null;
         const sourceStyle =
           Number.isFinite(layerAssetId) && sourceLayerIndex >= 0
             ? normalizeLayerStyle(props.layerStyles[layerAssetId], sourceLayerIndex)
@@ -1739,14 +2179,22 @@ export function MultiLayerMapPanel(props: {
                 classification: null,
               };
         const featureStyle = classifiedStyleForFeature(sourceStyle, feature as Feature<Geometry>);
-        return featureMapStyles(featureStyle, {
-          selected: useSelectionStyle,
-          selectionStrokeColor: "#b45f1c",
-          selectionFillColor: "rgba(199, 115, 38, 0.35)",
-          selectionPointFillColor: "rgba(199, 115, 38, 0.8)",
-        });
+        const featureGeometry = feature as Feature<Geometry>;
+        const hasAiSuggestionForFeature = aiSuggestionRef.current?.targetFeature === featureGeometry;
+        const labelValue =
+          sourceLayer?.labelsVisible && sourceLayer.labelField ? feature.get(sourceLayer.labelField) : null;
+        const baseStyles = hasAiSuggestionForFeature
+          ? transparentDraftPreviewStyles(featureStyle)
+          : featureMapStyles(featureStyle, {
+              selected: false,
+              labelValue,
+            });
+        return isSelected || hasAiSuggestionForFeature
+          ? [...asStyleArray(baseStyles), ...selectedFeatureOverlayStyles(featureGeometry)]
+          : baseStyles;
       },
     });
+    draftLayerRef.current = draftLayer;
     map.addLayer(draftLayer);
 
     const aiSuggestionLayer = new VectorLayer({
@@ -1761,11 +2209,174 @@ export function MultiLayerMapPanel(props: {
         stroke: new Stroke({ color: "#ffb000", width: 3, lineDash: [10, 7] }),
       }),
     });
+    aiSuggestionLayerRef.current = aiSuggestionLayer;
     map.addLayer(aiSuggestionLayer);
 
+    const measureLayer = new VectorLayer({
+      source: measureSourceRef.current,
+      style: new Style({
+        image: new CircleStyle({
+          radius: 5,
+          fill: new Fill({ color: "rgba(255, 255, 255, 0.92)" }),
+          stroke: new Stroke({ color: "#0f766e", width: 2 }),
+        }),
+        stroke: new Stroke({ color: "#0f766e", width: 3, lineDash: [8, 5] }),
+      }),
+    });
+    measureLayerRef.current = measureLayer;
+    map.addLayer(measureLayer);
+
+    const extent = [Infinity, Infinity, -Infinity, -Infinity];
+    const focusedLayer = props.zoomToLayerId
+      ? mapLayers.find((layer) => layer.assetId === props.zoomToLayerId)
+      : null;
+    const projectExtentForMap = transformExtentSafe(props.projectExtent3857, "EPSG:3857", mapProjection);
+    if (!focusedLayer && projectExtentForMap?.every(Number.isFinite)) {
+      extent[0] = projectExtentForMap[0];
+      extent[1] = projectExtentForMap[1];
+      extent[2] = projectExtentForMap[2];
+      extent[3] = projectExtentForMap[3];
+    } else {
+      const sourcesForFit = focusedLayer ? [focusedLayer] : mapLayers;
+      sourcesForFit.forEach(({ vectorSource }) => {
+        const layerExtent = vectorSource.getExtent();
+        if (layerExtent && Number.isFinite(layerExtent[0])) {
+          extent[0] = Math.min(extent[0], layerExtent[0]);
+          extent[1] = Math.min(extent[1], layerExtent[1]);
+          extent[2] = Math.max(extent[2], layerExtent[2]);
+          extent[3] = Math.max(extent[3], layerExtent[3]);
+        }
+      });
+    }
+    const zoomToLayerRequested = lastZoomToLayerTickRef.current !== props.zoomToLayerTick;
+    const shouldAutoFit =
+      Number.isFinite(extent[0]) &&
+      lastFitKeyRef.current !== fitKey &&
+      (!savedViewState || zoomToLayerRequested);
+    if (shouldAutoFit) {
+      map.getView().fit(extent, {
+        padding: [35, 35, 35, 35],
+        maxZoom: zoomToLayerRequested ? 16 : 12,
+        duration: 200,
+      });
+      lastFitKeyRef.current = fitKey;
+      lastZoomToLayerTickRef.current = props.zoomToLayerTick;
+    } else if (Number.isFinite(extent[0]) && lastFitKeyRef.current !== fitKey) {
+      lastFitKeyRef.current = fitKey;
+      lastZoomToLayerTickRef.current = props.zoomToLayerTick;
+    }
+
+    map.on("singleclick", (event) => {
+      if (!primaryMapButton(event) || editModeRef.current === "measure") {
+        return;
+      }
+      const hitTolerance = 9;
+      const hits: Feature<Geometry>[] = [];
+      map.forEachFeatureAtPixel(
+        event.pixel,
+        (hit) => {
+          hits.push(hit as Feature<Geometry>);
+          return undefined;
+        },
+        { hitTolerance },
+      );
+      const clickedLineFeature = [
+        ...mapLayers.flatMap((layer) => layer.vectorSource.getFeatures()),
+        ...draftSourceRef.current.getFeatures().filter((candidate) => {
+          const layerAssetId = Number(candidate.get("draft_layer_asset_id"));
+          return !Number.isFinite(layerAssetId) || !loadedLayerIdSet.has(layerAssetId) || visibleLayerIdSet.has(layerAssetId);
+        }),
+      ]
+        .map((candidate, index) => ({
+          feature: candidate as Feature<Geometry>,
+          distance: squaredDistanceToLineGeometry(event.coordinate, candidate.getGeometry()),
+          score: featureSelectionScore(candidate as Feature<Geometry>, index),
+        }))
+        .filter((candidate) => candidate.distance <= (map.getView().getResolution() ?? 1) ** 2 * hitTolerance ** 2)
+        .sort((left, right) => left.distance - right.distance || left.score - right.score)[0]?.feature;
+      const pixelFeature = hits
+        .map((hit, index) => ({ hit, score: featureSelectionScore(hit, index) }))
+        .sort((left, right) => left.score - right.score)[0]?.hit;
+      const feature = clickedLineFeature ?? pixelFeature;
+      const assetId = feature?.get("layerAssetId");
+      const featureIndex = feature?.get("featureIndex");
+      if (typeof assetId === "number" && typeof featureIndex === "number") {
+        if (selectedDraftFeatureRef.current) {
+          const previousFeature = selectedDraftFeatureRef.current;
+          selectedDraftFeatureRef.current = null;
+          previousFeature.changed();
+          draftLayer.changed();
+          setDraftRevision((value) => value + 1);
+        }
+        setSelectedFeatureKeys(new Set([featureSelectionKey(assetId, featureIndex)]));
+        props.onFeatureSelect({ assetId, featureIndex });
+        return;
+      }
+      if (selectedDraftFeatureRef.current && !feature?.get("draft_layer_asset_id")) {
+        const previousFeature = selectedDraftFeatureRef.current;
+        selectedDraftFeatureRef.current = null;
+        previousFeature.changed();
+        draftLayer.changed();
+        setDraftRevision((value) => value + 1);
+      }
+      setSelectedFeatureKeys(new Set());
+      props.onFeatureSelect(null);
+    });
+
+    return () => {
+      const view = map.getView();
+      const center = view.getCenter();
+      const zoom = view.getZoom();
+      if (center && typeof zoom === "number") {
+        mapViewStateRef.current = { center: [...center], zoom, projection: mapProjection };
+      }
+      map.removeLayer(aiSuggestionLayer);
+      map.removeLayer(draftLayer);
+      map.removeLayer(measureLayer);
+      map.removeInteraction(middleButtonDragPan);
+      if (aiSuggestionLayerRef.current === aiSuggestionLayer) {
+        aiSuggestionLayerRef.current = null;
+      }
+      if (draftLayerRef.current === draftLayer) {
+        draftLayerRef.current = null;
+      }
+      if (measureLayerRef.current === measureLayer) {
+        measureLayerRef.current = null;
+      }
+      if (basemapLayerRef.current === basemapLayer) {
+        basemapLayerRef.current = null;
+      }
+      map.getViewport().removeEventListener("mouseleave", handleMapMouseLeave);
+      map.setTarget(undefined);
+      mapRef.current = null;
+      vectorLayerRefs.current = [];
+      mapLayerSourcesRef.current = [];
+    };
+  }, [
+    props.layers,
+    props.layerStyles,
+    props.zoomToLayerId,
+    props.zoomToLayerTick,
+    fitKey,
+    draftColor,
+    draftFillOpacity,
+    isRussiaExtentLocked,
+    props.projectExtent3857,
+    props.hideBasemap,
+    basemapMode,
+    mapProjection,
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const draftLayer = draftLayerRef.current;
+    if (!map || !draftLayer) {
+      return undefined;
+    }
+
     const modify = new Modify({ source: draftSourceRef.current });
-    const selectDraft = new Select({ layers: [draftLayer] });
-    const snapSources = [draftSourceRef.current, ...mapLayers.map((layer) => layer.vectorSource)];
+    const selectDraft = new Select({ layers: [draftLayer], style: null });
+    const snapSources = [draftSourceRef.current, ...mapLayerSourcesRef.current];
     const snapInteractions =
       snapSettings.enabled && (snapSettings.point || snapSettings.endpoint || snapSettings.vertex || snapSettings.edge)
         ? snapSources.flatMap((source) => {
@@ -1817,6 +2428,7 @@ export function MultiLayerMapPanel(props: {
             return interactions;
           })
         : [];
+
     selectDraft.on("select", (event) => {
       const selectedFeature = (event.selected[0] as Feature<Geometry> | undefined) ?? null;
       if (selectedFeature) {
@@ -1824,58 +2436,11 @@ export function MultiLayerMapPanel(props: {
         props.onFeatureSelect(null);
       }
       selectedDraftFeatureRef.current = selectedFeature;
+      event.deselected.forEach((feature) => feature.changed());
+      event.selected.forEach((feature) => feature.changed());
+      draftLayer.changed();
       setDraftRevision((value) => value + 1);
     });
-    if (canEditActiveLayer) {
-      map.addInteraction(selectDraft);
-      map.addInteraction(modify);
-    }
-
-    let draw: Draw | null = null;
-    const drawTypeByMode: Partial<Record<EditMode, "Point" | "LineString" | "Polygon">> = {
-      point: "Point",
-      line: "LineString",
-      polygon: "Polygon",
-    };
-    const drawType = drawTypeByMode[editMode];
-    if (drawType && canEditActiveLayer) {
-      draw = new Draw({
-        source: draftSourceRef.current,
-        type: drawType,
-      });
-      draw.on("drawstart", () => {
-        rememberDraftState();
-      });
-      draw.on("drawend", (event) => {
-        const feature = event.feature as Feature<Geometry>;
-        selectedDraftFeatureRef.current = feature;
-        justDrawnDraftFeaturesRef.current.add(feature);
-        applyDraftFieldsToFeature(feature);
-        event.feature.changed();
-        setDraftRevision((value) => value + 1);
-      });
-      map.addInteraction(draw);
-    }
-    if (editMode === "aiBox" && canEditActiveLayer) {
-      const aiBoxSource = new VectorSource();
-      draw = new Draw({
-        source: aiBoxSource,
-        type: "Circle",
-        geometryFunction: createBox(),
-      });
-      draw.on("drawstart", () => {
-        setDraftStatus("AI-контур: выделите рамкой объект на карте.");
-      });
-      draw.on("drawend", (event) => {
-        aiBoxSource.clear();
-        void requestAiSegmentBox(event.feature as Feature<Geometry>);
-      });
-      map.addInteraction(draw);
-    }
-    if (canEditActiveLayer) {
-      snapInteractions.forEach((snap) => map.addInteraction(snap));
-    }
-    drawInteractionRef.current = draw;
     modify.on("modifystart", () => {
       rememberDraftState();
     });
@@ -1883,78 +2448,96 @@ export function MultiLayerMapPanel(props: {
       setDraftRevision((value) => value + 1);
     });
 
-    const extent = [Infinity, Infinity, -Infinity, -Infinity];
-    const focusedLayer = props.zoomToLayerId
-      ? mapLayers.find((layer) => layer.assetId === props.zoomToLayerId)
-      : null;
-    const projectExtentForMap = transformExtentSafe(props.projectExtent3857, "EPSG:3857", mapProjection);
-    if (!focusedLayer && projectExtentForMap?.every(Number.isFinite)) {
-      extent[0] = projectExtentForMap[0];
-      extent[1] = projectExtentForMap[1];
-      extent[2] = projectExtentForMap[2];
-      extent[3] = projectExtentForMap[3];
-    } else {
-      const sourcesForFit = focusedLayer ? [focusedLayer] : mapLayers;
-      sourcesForFit.forEach(({ vectorSource }) => {
-        const layerExtent = vectorSource.getExtent();
-        if (layerExtent && Number.isFinite(layerExtent[0])) {
-          extent[0] = Math.min(extent[0], layerExtent[0]);
-          extent[1] = Math.min(extent[1], layerExtent[1]);
-          extent[2] = Math.max(extent[2], layerExtent[2]);
-          extent[3] = Math.max(extent[3], layerExtent[3]);
-        }
-      });
-    }
-    if (Number.isFinite(extent[0]) && lastFitKeyRef.current !== fitKey) {
-      map.getView().fit(extent, {
-        padding: [35, 35, 35, 35],
-        maxZoom: 16,
-        duration: 200,
-      });
-      lastFitKeyRef.current = fitKey;
+    let draw: Draw | null = null;
+    let measureDraw: Draw | null = null;
+    const drawTypeByMode: Partial<Record<EditMode, "Point" | "LineString" | "Polygon">> = {
+      point: "Point",
+      line: "LineString",
+      polygon: "Polygon",
+    };
+    const drawType = drawTypeByMode[editMode];
+
+    if (canEditActiveLayer) {
+      map.addInteraction(selectDraft);
+      map.addInteraction(modify);
+
+      if (drawType) {
+        draw = new Draw({
+          source: draftSourceRef.current,
+          type: drawType,
+          condition: secondaryMapButton,
+        });
+        draw.on("drawstart", () => {
+          rememberDraftState();
+        });
+        draw.on("drawend", (event) => {
+          const feature = event.feature as Feature<Geometry>;
+          const previousFeature = selectedDraftFeatureRef.current;
+          selectedDraftFeatureRef.current = feature;
+          justDrawnDraftFeaturesRef.current.delete(feature);
+          applyDraftFieldsToFeature(feature);
+          previousFeature?.changed();
+          event.feature.changed();
+          draftLayer.changed();
+          setDraftRevision((value) => value + 1);
+        });
+        map.addInteraction(draw);
+      }
+
+      if (editMode === "aiBox") {
+        const aiBoxSource = new VectorSource();
+        draw = new Draw({
+          source: aiBoxSource,
+          type: "Circle",
+          geometryFunction: createBox(),
+          condition: secondaryMapButton,
+        });
+        draw.on("drawstart", () => {
+          setDraftStatus("AI-контур: выделите рамкой объект на карте.");
+        });
+        draw.on("drawend", (event) => {
+          aiBoxSource.clear();
+          void requestAiSegmentBox(event.feature as Feature<Geometry>);
+        });
+        map.addInteraction(draw);
+      }
+
+      snapInteractions.forEach((snap) => map.addInteraction(snap));
     }
 
-    map.on("singleclick", (event) => {
-      const hits: Feature<Geometry>[] = [];
-      map.forEachFeatureAtPixel(
-        event.pixel,
-        (hit) => {
-          hits.push(hit as Feature<Geometry>);
-          return undefined;
-        },
-        { hitTolerance: 6 },
-      );
-      const feature = hits
-        .map((hit, index) => ({ hit, score: featureSelectionScore(hit, index) }))
-        .sort((left, right) => left.score - right.score)[0]?.hit;
-      const assetId = feature?.get("layerAssetId");
-      const featureIndex = feature?.get("featureIndex");
-      if (typeof assetId === "number" && typeof featureIndex === "number") {
-        if (selectedDraftFeatureRef.current) {
-          selectedDraftFeatureRef.current = null;
-          setDraftRevision((value) => value + 1);
+    if (editMode === "measure") {
+      measureDraw = new Draw({
+        source: measureSourceRef.current,
+        type: "LineString",
+        condition: primaryMapButton,
+      });
+      measureDraw.on("drawstart", (event) => {
+        measureSourceRef.current.clear();
+        setMeasureDistanceText("0 м");
+        const geometry = event.feature.getGeometry();
+        geometry?.on("change", () => {
+          if (geometry instanceof LineString) {
+            setMeasureDistanceText(formatDistanceMeters(getLength(geometry, { projection: mapProjection })));
+          }
+        });
+      });
+      measureDraw.on("drawend", (event) => {
+        const geometry = event.feature.getGeometry();
+        if (geometry instanceof LineString) {
+          setMeasureDistanceText(formatDistanceMeters(getLength(geometry, { projection: mapProjection })));
         }
-        setSelectedFeatureKeys(new Set([featureSelectionKey(assetId, featureIndex)]));
-        props.onFeatureSelect({ assetId, featureIndex });
-        return;
-      }
-      if (selectedDraftFeatureRef.current && !feature?.get("draft_layer_asset_id")) {
-        selectedDraftFeatureRef.current = null;
-        setDraftRevision((value) => value + 1);
-      }
-      setSelectedFeatureKeys(new Set());
-      props.onFeatureSelect(null);
-    });
+      });
+      map.addInteraction(measureDraw);
+    }
+
+    drawInteractionRef.current = draw;
 
     return () => {
-      const view = map.getView();
-      const center = view.getCenter();
-      const zoom = view.getZoom();
-      if (center && typeof zoom === "number") {
-        mapViewStateRef.current = { center: [...center], zoom, projection: mapProjection };
-      }
       if (draw) {
         map.removeInteraction(draw);
+      }
+      if (measureDraw) {
+        map.removeInteraction(measureDraw);
       }
       if (drawInteractionRef.current === draw) {
         drawInteractionRef.current = null;
@@ -1962,34 +2545,29 @@ export function MultiLayerMapPanel(props: {
       map.removeInteraction(selectDraft);
       map.removeInteraction(modify);
       snapInteractions.forEach((snap) => map.removeInteraction(snap));
-      map.removeLayer(aiSuggestionLayer);
-      map.removeLayer(draftLayer);
-      map.getViewport().removeEventListener("mouseleave", handleMapMouseLeave);
-      map.setTarget(undefined);
-      mapRef.current = null;
-      vectorLayerRefs.current = [];
     };
   }, [
-    props.layers,
-    props.layerStyles,
-    props.zoomToLayerId,
-    props.zoomToLayerTick,
-    props.isDraftEditingEnabled,
+    canEditActiveLayer,
+    editMode,
+    snapSettings,
     props.activeEditableLayerId,
     props.activeEditableLayerName,
-    editMode,
-    fitKey,
-    draftColor,
-    draftFillOpacity,
+    props.layers,
     draftFieldsText,
-    draftRevision,
-    isRussiaExtentLocked,
-    snapSettings,
-    props.projectExtent3857,
-    props.hideBasemap,
-    basemapMode,
     mapProjection,
   ]);
+
+  useEffect(() => {
+    const viewport = mapRef.current?.getViewport();
+    if (!viewport || !canEditActiveLayer || editMode === "select") {
+      return;
+    }
+    const preventDrawingContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+    viewport.addEventListener("contextmenu", preventDrawingContextMenu);
+    return () => viewport.removeEventListener("contextmenu", preventDrawingContextMenu);
+  }, [canEditActiveLayer, editMode, mapProjection]);
 
   return (
     <section className="layer-map-panel" ref={panelRef}>
@@ -1998,7 +2576,6 @@ export function MultiLayerMapPanel(props: {
           <p className="eyebrow">Карта</p>
           <h3>Общая карта слоёв</h3>
         </div>
-        <span>{visibleLayers.length} включено</span>
       </div>
       <MapToolbar
         isDraftEditingEnabled={props.isDraftEditingEnabled}
@@ -2020,13 +2597,37 @@ export function MultiLayerMapPanel(props: {
         basemapMode={basemapMode}
         mapZoom={mapZoom}
         mapScaleText={mapScaleText}
+        measureDistanceText={measureDistanceText}
         isRussiaExtentLocked={isRussiaExtentLocked}
         coordinateProjection={coordinateProjection}
         coordinateProjections={props.coordinateProjections}
         cursorCoordinates={cursorCoordinates}
         onToggleDraftEditing={() => {
+          const selectedLayerDiffers =
+            props.selectedLayerForEditingId !== null &&
+            props.selectedLayerForEditingId !== undefined &&
+            props.selectedLayerForEditingId !== props.activeEditableLayerId;
+          if (selectedLayerDiffers && props.onRequestSelectedLayerEditing) {
+            void props.onRequestSelectedLayerEditing();
+            setDraftStatus(
+              props.selectedLayerForEditingName
+                ? `Переключаю редактирование на слой «${props.selectedLayerForEditingName}».`
+                : "Переключаю редактируемый слой.",
+            );
+            return;
+          }
+
           if (!props.activeEditableLayerId) {
-            setDraftStatus("Сначала включите редактирование конкретного слоя через меню слоя.");
+            if (props.onRequestSelectedLayerEditing) {
+              void props.onRequestSelectedLayerEditing();
+              setDraftStatus(
+                props.selectedLayerForEditingName
+                  ? `Включаю редактирование слоя «${props.selectedLayerForEditingName}».`
+                  : "Выберите слой в списке слева, затем включите редактирование.",
+              );
+              return;
+            }
+            setDraftStatus("Сначала выберите слой в списке слева или включите редактирование через меню слоя.");
             return;
           }
           props.onDraftEditingEnabledChange(!props.isDraftEditingEnabled);
@@ -2054,7 +2655,6 @@ export function MultiLayerMapPanel(props: {
           setIsDraftTableOpen((value) => !value);
           props.onWindowFocus("table");
         }}
-        onExportDraftLayer={exportDraftLayer}
         onExportShapefileArchive={() => void exportShapefileArchive()}
         onExportMapPng={() => void exportMapPng()}
         onBasemapModeChange={setBasemapMode}
@@ -2088,7 +2688,6 @@ export function MultiLayerMapPanel(props: {
           draftCrs={draftCrs}
           draftName={draftName}
           draftGeometryType={draftGeometryType}
-          detectedGeometryType={detectDraftGeometryType()}
           draftColor={draftColor}
           draftFillOpacity={draftFillOpacity}
           draftSchemaFields={draftSchemaFields}
@@ -2122,6 +2721,8 @@ export function MultiLayerMapPanel(props: {
         <GisFeatureTable
           layer={tableLayer}
           draftFeatures={tableDraftFeatures}
+          draftSchemaFields={draftSchemaFields}
+          draftFieldTypes={draftFieldTypes}
           selectedDraftFeature={selectedDraftFeature}
           selectedFeature={props.selectedFeature}
           onFeatureSelect={props.onFeatureSelect}
@@ -2132,7 +2733,9 @@ export function MultiLayerMapPanel(props: {
           onAttributeChange={props.onLayerFeatureAttributeChange}
           onDraftAttributeChange={updateDraftFeatureObjectAttribute}
           onAddField={addTableLayerAttributeField}
+          onAddDraftFieldWithType={addDraftFieldWithType}
           onRemoveField={removeTableLayerAttributeField}
+          onDraftFieldTypeChange={setDraftFieldType}
           onClose={props.onCloseTable}
           position={tableWindowPosition}
           zIndex={props.windowZIndexes.table}
@@ -2154,12 +2757,15 @@ export function MultiLayerMapPanel(props: {
         <DraftFeatureTable
           layerName={draftName || "draft-layer"}
           fields={draftSchemaFields}
+          fieldTypes={draftFieldTypes}
           features={draftFeatures}
           selectedFeature={selectedDraftFeature}
           onFeatureSelect={selectDraftFeatureByIndex}
           onAttributeChange={updateDraftFeatureAttribute}
           onAddField={addDraftFieldByName}
+          onAddFieldWithType={addDraftFieldWithType}
           onRemoveField={removeDraftField}
+          onFieldTypeChange={setDraftFieldType}
           onClose={() => setIsDraftTableOpen(false)}
           position={tableWindowPosition}
           zIndex={props.windowZIndexes.table}

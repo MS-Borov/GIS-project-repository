@@ -23,6 +23,13 @@ function layerDisplayName(assetName: string) {
   return assetName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
 }
 
+function formatDetectedFormat(format: string) {
+  if (format === "geojson") return "Слой карты";
+  if (format === "shapefile_zip") return "Архив слоёв";
+  if (format === "qgis_project") return "QGIS-проект";
+  return format.replace(/_/g, " ");
+}
+
 function statusLabel(status: string) {
   const value = status.toLowerCase();
   if (value === "passed") return "Пройдено";
@@ -86,7 +93,7 @@ export function ArchivePreviewReport(props: { preview: ArchivePreviewResponse })
               <tr key={summary.asset_id}>
                 <td>
                   <strong>{layerDisplayName(summary.asset_name)}</strong>
-                  <span>{summary.detected_format}</span>
+                  <span>{formatDetectedFormat(summary.detected_format)}</span>
                 </td>
                 <td>
                   <strong>{statusLabel(summary.status ?? "unknown")}</strong>

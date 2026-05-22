@@ -6,7 +6,6 @@ type DraftPropertiesPanelProps = {
   draftCrs: string;
   draftName: string;
   draftGeometryType: string;
-  detectedGeometryType: string;
   draftColor: string;
   draftFillOpacity: number;
   draftSchemaFields: string[];
@@ -82,7 +81,7 @@ export function DraftPropertiesPanel(props: DraftPropertiesPanelProps) {
           />
         </label>
         <label>
-          Цвет легенды
+          Цвет слоя
           <input type="color" value={props.draftColor} onChange={(event) => props.onDraftColorChange(event.target.value)} />
         </label>
         <label>
@@ -131,18 +130,6 @@ export function DraftPropertiesPanel(props: DraftPropertiesPanelProps) {
             placeholder="Новое поле"
           />
           <button onClick={props.onAddDraftField}>Добавить поле</button>
-        </div>
-      </div>
-      <div className="draft-properties-block">
-        <strong>Легенда</strong>
-        <div className="draft-legend-row">
-          <span
-            className="draft-legend-symbol"
-            style={{ borderColor: props.draftColor, background: `${props.draftColor}33` }}
-          />
-          <strong>{props.draftName || "draft-layer"}</strong>
-          <span>{props.draftGeometryType === "mixed" ? props.detectedGeometryType : props.draftGeometryType}</span>
-          <span>{Math.round(props.draftFillOpacity * 100)}% заливки</span>
         </div>
       </div>
     </section>

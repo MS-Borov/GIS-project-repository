@@ -32,6 +32,8 @@ from app.services.asset_validator import validate_asset_from_storage
 from app.services.expected_output_evaluator import evaluate_asset_against_expected_output
 from app.services.multi_layer_requirement_matcher import match_assets_to_expected_outputs
 from app.services.multi_layer_summary_builder import build_multi_layer_summary
+from app.services.submission_archive_parser import parse_submission_archive
+from app.services.submission_validator import validate_submission_file
 from app.services.storage import (
     build_asset_storage_key,
     build_map_draft_storage_key,
@@ -191,6 +193,12 @@ def _draft_geojson_to_shapefile_archive(
             )
 
         return archive_path.read_bytes()
+
+
+def _geojson_style_manifest(geojson: dict[str, Any]) -> dict[str, Any] | None:
+    properties = geojson.get("properties") if isinstance(geojson.get("properties"), dict) else {}
+    manifest = properties.get("style_manifest")
+    return manifest if isinstance(manifest, dict) else None
 
 
 def _to_submission_read(submission: Submission) -> SubmissionRead:
@@ -440,6 +448,166 @@ def _evaluate_single_geojson_submission(
         submission.status = "passed"
 
 
+def _evaluate_submission_assets(
+    *,
+    db: Session,
+    submission: Submission,
+    assets: list[SubmissionAsset],
+) -> None:
+    asset_validation_map: dict[int, dict[str, Any]] = {}
+
+    for asset in assets:
+        validation = validate_asset_from_storage(asset)
+        asset_validation_map[asset.id] = validation
+        db.add(
+            SubmissionCheck(
+                submission_id=submission.id,
+                submission_asset_id=asset.id,
+                status=validation["status"],
+                file_type=validation["file_type"],
+                message=validation["message"],
+                result_json={
+                    "mode": "technical_asset_validation",
+                    "detected_format": validation.get("detected_format"),
+                    "details": validation.get("details", {}),
+                },
+            )
+        )
+        asset.status = validation["status"]
+        asset.message = validation["message"]
+        asset.detected_format = validation["detected_format"]
+
+    db.flush()
+
+    requirements = (
+        db.query(AssignmentRequirements)
+        .filter(AssignmentRequirements.assignment_id == submission.assignment_id)
+        .first()
+    )
+    expected_outputs = requirements.expected_outputs_json if requirements else None
+
+    layer_assets = [asset for asset in assets if asset.asset_type == "layer"]
+    if expected_outputs:
+        match_result = match_assets_to_expected_outputs(layer_assets, expected_outputs=expected_outputs)
+        output_evaluations = []
+        for match in match_result["matches"]:
+            expected_output = match["expected_output"]
+            asset_id = match["asset_id"]
+
+            if asset_id is None:
+                message = f"Asset for expected output '{expected_output.get('name')}' was not found."
+                output_evaluations.append(
+                    {
+                        "expected_output": expected_output,
+                        "asset_id": None,
+                        "status": "failed",
+                        "message": message,
+                    }
+                )
+                db.add(
+                    SubmissionCheck(
+                        submission_id=submission.id,
+                        submission_asset_id=None,
+                        status="failed",
+                        file_type="requirements_output",
+                        message=message,
+                        result_json={
+                            "mode": "expected_output_missing",
+                            "expected_output": expected_output,
+                            "problems": [{"code": "expected_output_missing", "message": message}],
+                            "warnings": [],
+                            "passed_rules": [],
+                        },
+                    )
+                )
+                continue
+
+            matched_asset = next((asset for asset in layer_assets if asset.id == asset_id), None)
+            validation_result = asset_validation_map.get(asset_id, {})
+            output_evaluation = evaluate_asset_against_expected_output(
+                expected_output=expected_output,
+                validation_result=validation_result,
+            )
+            output_evaluations.append(
+                {
+                    "expected_output": expected_output,
+                    "asset_id": asset_id,
+                    "asset_name": matched_asset.asset_name if matched_asset else None,
+                    "status": output_evaluation["status"],
+                    "message": output_evaluation["message"],
+                }
+            )
+            db.add(
+                SubmissionCheck(
+                    submission_id=submission.id,
+                    submission_asset_id=asset_id,
+                    status=output_evaluation["status"],
+                    file_type="requirements_output",
+                    message=output_evaluation["message"],
+                    result_json=output_evaluation["result_json"],
+                )
+            )
+
+        summary = build_multi_layer_summary(match_result=match_result, output_evaluations=output_evaluations)
+        db.add(
+            SubmissionCheck(
+                submission_id=submission.id,
+                submission_asset_id=None,
+                status=summary["status"],
+                file_type="requirements_summary",
+                message=summary["message"],
+                result_json=summary["result_json"],
+            )
+        )
+    elif layer_assets:
+        statuses = {asset_validation_map.get(asset.id, {}).get("status", "warning") for asset in layer_assets}
+        status_value = "failed" if "failed" in statuses else "warning" if "warning" in statuses else "passed"
+        message = f"Submitted archive contains {len(layer_assets)} GIS layer(s). Technical validation completed."
+        db.add(
+            SubmissionCheck(
+                submission_id=submission.id,
+                submission_asset_id=None,
+                status=status_value,
+                file_type="requirements_summary",
+                message=message,
+                result_json={
+                    "mode": "archive_layers_summary",
+                    "layer_count": len(layer_assets),
+                    "layers": [
+                        {
+                            "asset_id": asset.id,
+                            "asset_name": asset.asset_name,
+                            "status": asset_validation_map.get(asset.id, {}).get("status"),
+                            "details": asset_validation_map.get(asset.id, {}).get("details", {}),
+                        }
+                        for asset in layer_assets
+                    ],
+                },
+            )
+        )
+    else:
+        db.add(
+            SubmissionCheck(
+                submission_id=submission.id,
+                submission_asset_id=None,
+                status="warning",
+                file_type="requirements_summary",
+                message="Submitted archive does not contain GIS layers.",
+                result_json={"mode": "archive_without_layers", "warnings": ["No GIS layers found."]},
+            )
+        )
+
+    db.flush()
+    checks = db.query(SubmissionCheck).filter(SubmissionCheck.submission_id == submission.id).all()
+    statuses = {check.status.lower() for check in checks}
+    if "failed" in statuses:
+        submission.status = "failed"
+    elif "warning" in statuses:
+        submission.status = "warning"
+    else:
+        submission.status = "passed"
+
+
 @router.get("/", response_model=list[MapDraftRead])
 def list_map_drafts(
     assignment_id: int | None = Query(default=None),
@@ -586,39 +754,62 @@ def submit_map_draft(
     _ensure_student_assignment_access(draft.assignment, current_user, db)
 
     geojson = _read_storage_json(draft.geojson_storage_key)
-    data = _geojson_bytes(geojson)
-    filename = f"{draft.name}.geojson" if not draft.name.lower().endswith(".geojson") else draft.name
+    style_manifest = _geojson_style_manifest(geojson)
+    data = _draft_geojson_to_shapefile_archive(geojson, draft.name, style_manifest)
+    filename = f"{_safe_archive_stem(draft.name, 'draft_layers')}_shapefiles.zip"
     submission_key = build_submission_storage_key(filename)
-    upload_bytes(submission_key, data, "application/geo+json")
+    upload_bytes(submission_key, data, "application/zip")
 
     submission = Submission(
         assignment_id=draft.assignment_id,
         student_id=current_user.id,
         original_filename=filename,
         storage_key=submission_key,
-        content_type="application/geo+json",
+        content_type="application/zip",
         size_bytes=len(data),
         status="uploaded",
     )
     db.add(submission)
     db.flush()
 
-    asset_key = build_asset_storage_key(submission.id, filename)
-    upload_bytes(asset_key, data, "application/geo+json")
-    asset = SubmissionAsset(
-        submission_id=submission.id,
-        asset_name=filename,
-        asset_type="layer",
-        detected_format="geojson",
-        status="uploaded",
-        message="Draft GeoJSON submitted from map editor.",
-        storage_key=asset_key,
-        group_key=None,
-    )
-    db.add(asset)
-    db.flush()
+    created_assets: list[SubmissionAsset] = []
+    for parsed_asset in parse_submission_archive(data):
+        asset_bytes = parsed_asset.get("file_bytes")
+        asset_storage_key = None
+        if asset_bytes is not None:
+            asset_storage_key = build_asset_storage_key(submission.id, parsed_asset["asset_name"])
+            upload_bytes(asset_storage_key, asset_bytes, "application/octet-stream")
 
-    _evaluate_single_geojson_submission(db=db, submission=submission, asset=asset)
+        db_asset = SubmissionAsset(
+            submission_id=submission.id,
+            asset_name=parsed_asset["asset_name"],
+            asset_type=parsed_asset["asset_type"],
+            detected_format=parsed_asset["detected_format"],
+            status=parsed_asset["status"],
+            message=parsed_asset["message"],
+            storage_key=asset_storage_key,
+            group_key=parsed_asset.get("group_key"),
+        )
+        db.add(db_asset)
+        created_assets.append(db_asset)
+
+    if not created_assets:
+        validation = validate_submission_file(filename, data)
+        db.add(
+            SubmissionCheck(
+                submission_id=submission.id,
+                submission_asset_id=None,
+                status="failed",
+                file_type=validation["file_type"],
+                message=f"Draft archive did not produce layer assets: {validation['message']}",
+                result_json={"mode": "draft_archive_parse_failed", "details": validation.get("details", {})},
+            )
+        )
+        submission.status = "failed"
+    else:
+        db.flush()
+        _evaluate_submission_assets(db=db, submission=submission, assets=created_assets)
+
     draft.status = "submitted"
     draft.last_submission_id = submission.id
 

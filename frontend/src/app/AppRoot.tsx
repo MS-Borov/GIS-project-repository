@@ -9,7 +9,9 @@ import { SubmissionPanel } from "../features/submissions/SubmissionPanel";
 import { AssignmentOverview, ClassStream, CourseHeader, PeoplePanel } from "../features/course/CoursePanels";
 import { LayerWorkspace } from "../features/map/LayerWorkspace";
 import { MAP_COORDINATE_PROJECTIONS } from "../features/map/mapWorkspaceUtils";
+import type { LayerStyleManifest } from "../features/map/mapWorkspaceUtils";
 import { StandaloneArchivePreview, StandaloneAssignmentWorkspace, StandaloneMapViewer } from "../features/map/StandaloneMapScreens";
+import { UserProfileMenu } from "../features/profile/UserProfileMenu";
 
 type UserRole = "admin" | "teacher" | "student";
 type AuthMode = "login" | "register";
@@ -40,6 +42,8 @@ type User = {
   full_name?: string | null;
   role: UserRole;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type AuthResponse = {
@@ -212,7 +216,7 @@ type Requirements = {
 };
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "/api";
 
 const AUTH_STORAGE_KEY = "gis_edu_auth";
 const THEME_STORAGE_KEY = "gis_edu_theme";
@@ -268,6 +272,13 @@ function stringOrNull(value: string) {
 
 function layerDisplayName(assetName: string) {
   return assetName.replace(/\.(zip|geojson|shp)$/i, "");
+}
+
+function formatDetectedFormat(format: string) {
+  if (format === "geojson") return "Слой карты";
+  if (format === "shapefile_zip") return "Архив слоёв";
+  if (format === "qgis_project") return "QGIS-проект";
+  return format.replace(/_/g, " ");
 }
 
 function assignmentWorkspaceUrl(assignmentId: number, options: { loadDraft?: boolean } = {}) {
@@ -438,12 +449,16 @@ function App() {
 
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<number | null>(null);
-  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [submissionArchiveFile, setSubmissionArchiveFile] = useState<File | null>(null);
+  const [submissionReportFile, setSubmissionReportFile] = useState<File | null>(null);
   const [assets, setAssets] = useState<SubmissionAsset[]>([]);
+  const [submissionStyleManifest, setSubmissionStyleManifest] = useState<LayerStyleManifest | null>(null);
   const [checks, setChecks] = useState<SubmissionCheck[]>([]);
   const [aiReview, setAiReview] = useState<AiReviewResponse | null>(null);
   const [mapPreview, setMapPreview] = useState<GeoJsonPreview | null>(null);
   const [selectedMapFeatureIndex, setSelectedMapFeatureIndex] = useState<number | null>(null);
+  const submissionFiles = [submissionArchiveFile, submissionReportFile].filter(Boolean) as File[];
+  const submissionFileIsArchive = Boolean(submissionArchiveFile);
 
   const [requirements, setRequirements] = useState<Requirements>(emptyRequirements);
   const [expectedGeometryTypesText, setExpectedGeometryTypesText] = useState("null");
@@ -592,6 +607,39 @@ function App() {
     }
   }
 
+  async function updateCurrentUserEmail(emailValue: string) {
+    const email = emailValue.trim();
+    if (!authToken || !currentUser || !email || email === currentUser.email) {
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const user = await fetchJson<User>("/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setCurrentUser(user);
+      localStorage.setItem(
+        AUTH_STORAGE_KEY,
+        JSON.stringify({
+          access_token: authToken,
+          token_type: "bearer",
+          user,
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось обновить почту.";
+      setErrorMessage(message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   function logout() {
     setAuthToken(null);
     setCurrentUser(null);
@@ -621,6 +669,7 @@ function App() {
     setSelectedSubmissionId(null);
     setSubmissions([]);
     setAssets([]);
+    setSubmissionStyleManifest(null);
     setChecks([]);
     setAiReview(null);
     setMapPreview(null);
@@ -849,6 +898,7 @@ function App() {
     setSelectedAssignmentId(assignmentId);
     setSelectedSubmissionId(null);
     setAssets([]);
+    setSubmissionStyleManifest(null);
     setChecks([]);
     setAiReview(null);
     setMapPreview(null);
@@ -864,7 +914,7 @@ function App() {
       setErrorMessage("Выберите задание.");
       return;
     }
-    if (!submissionFile) {
+    if (submissionFiles.length === 0) {
       setErrorMessage("Выберите архив для сдачи.");
       return;
     }
@@ -875,13 +925,14 @@ function App() {
     try {
       const formData = new FormData();
       formData.append("assignment_id", String(selectedAssignmentId));
-      formData.append("file", submissionFile);
+      submissionFiles.forEach((file) => formData.append("files", file));
 
       const submission = await fetchJson<Submission>("/submissions/", {
         method: "POST",
         body: formData,
       });
-      setSubmissionFile(null);
+      setSubmissionArchiveFile(null);
+      setSubmissionReportFile(null);
       setSelectedSubmissionId(submission.id);
       setStatusMessage(`Работа «${submission.original_filename}» загружена и проверена.`);
       await loadSubmissions();
@@ -898,7 +949,7 @@ function App() {
       setErrorMessage("Выберите задание.");
       return;
     }
-    if (!submissionFile) {
+    if (!submissionArchiveFile) {
       setErrorMessage("Выберите ZIP-архив для предпросмотра.");
       return;
     }
@@ -909,7 +960,7 @@ function App() {
     try {
       const formData = new FormData();
       formData.append("assignment_id", String(selectedAssignmentId));
-      formData.append("file", submissionFile);
+      formData.append("file", submissionArchiveFile);
 
       const preview = await fetchJson<ArchivePreviewResponse>("/submissions/archive-preview", {
         method: "POST",
@@ -935,12 +986,14 @@ function App() {
     setErrorMessage(null);
 
     try {
-      const [nextAssets, nextChecks] = await Promise.all([
+      const [nextAssets, nextChecks, nextStyleManifest] = await Promise.all([
         fetchJson<SubmissionAsset[]>(`/submissions/${submissionId}/assets`),
         fetchJson<SubmissionCheck[]>(`/submissions/${submissionId}/checks`),
+        fetchJson<LayerStyleManifest | null>(`/submissions/${submissionId}/style-manifest`).catch(() => null),
       ]);
       setAssets(nextAssets);
       setChecks(nextChecks);
+      setSubmissionStyleManifest(nextStyleManifest);
       setStatusMessage(`Детали submission #${submissionId} загружены.`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить детали сдачи.");
@@ -1144,17 +1197,14 @@ function App() {
         <div className="toolbar-actions">
           {currentUser ? (
             <div className="user-panel">
-              <div>
-                <strong>{currentUser.full_name || currentUser.email}</strong>
-                <span>{roleLabel(currentUser.role)}</span>
-              </div>
+              <UserProfileMenu
+                user={currentUser}
+                isLoading={isLoading}
+                onUpdateEmail={updateCurrentUserEmail}
+                onRefresh={refreshCurrentUser}
+                onLogout={logout}
+              />
               <ThemeIconButton themeMode={themeMode} onToggle={() => toggleStoredTheme(themeMode, setThemeMode)} />
-              <button onClick={() => void refreshCurrentUser()} disabled={isLoading}>
-                Проверить сессию
-              </button>
-              <button onClick={logout} disabled={isLoading}>
-                Выйти
-              </button>
             </div>
           ) : null}
         </div>
@@ -1246,6 +1296,7 @@ function App() {
                 memberRole={memberRole}
                 selectedSubmissionId={selectedSubmissionId}
                 assets={assets}
+                styleManifest={submissionStyleManifest}
                 checks={checks}
                 aiReview={aiReview}
                 mapPreview={mapPreview}
@@ -1310,11 +1361,15 @@ function App() {
                 courseMembers={courseMembers}
                 selectedSubmissionId={selectedSubmissionId}
                 assets={assets}
+                styleManifest={submissionStyleManifest}
                 checks={checks}
                 aiReview={aiReview}
                 mapPreview={mapPreview}
                 selectedMapFeatureIndex={selectedMapFeatureIndex}
-                hasSubmissionFile={Boolean(submissionFile)}
+                hasSubmissionFile={submissionFiles.length > 0}
+                submissionFileIsArchive={submissionFileIsArchive}
+                submissionArchiveFile={submissionArchiveFile}
+                submissionReportFile={submissionReportFile}
                 activeTab={activeTab}
                 isLoading={isLoading}
                 onCourseHome={openCourseHome}
@@ -1323,7 +1378,8 @@ function App() {
                 onAssignmentSelect={(id) => void selectAssignment(id)}
                 onAssignmentsReload={() => void loadAssignments()}
                 onLoadCourseMembers={() => void loadCourseMembers()}
-                onSubmissionFileChange={setSubmissionFile}
+                onSubmissionArchiveFileChange={setSubmissionArchiveFile}
+                onSubmissionReportFileChange={setSubmissionReportFile}
                 onUploadSubmission={() => void uploadSubmission()}
                 onPreviewSubmissionArchive={() => void previewSubmissionArchive()}
                 onSubmissionSelect={(id) => void loadSubmissionDetails(id)}
@@ -1623,6 +1679,7 @@ function TeacherWorkspace(props: {
   memberRole: "student" | "teacher";
   selectedSubmissionId: number | null;
   assets: SubmissionAsset[];
+  styleManifest?: LayerStyleManifest | null;
   checks: SubmissionCheck[];
   aiReview: AiReviewResponse | null;
   mapPreview: GeoJsonPreview | null;
@@ -1768,11 +1825,15 @@ function StudentWorkspace(props: {
   courseMembers: CourseMember[];
   selectedSubmissionId: number | null;
   assets: SubmissionAsset[];
+  styleManifest?: LayerStyleManifest | null;
   checks: SubmissionCheck[];
   aiReview: AiReviewResponse | null;
   mapPreview: GeoJsonPreview | null;
   selectedMapFeatureIndex: number | null;
   hasSubmissionFile: boolean;
+  submissionFileIsArchive: boolean;
+  submissionArchiveFile: File | null;
+  submissionReportFile: File | null;
   activeTab: CourseTab;
   isLoading: boolean;
   onCourseHome: () => void;
@@ -1781,7 +1842,8 @@ function StudentWorkspace(props: {
   onAssignmentSelect: (id: number) => void;
   onAssignmentsReload: () => void;
   onLoadCourseMembers: () => void;
-  onSubmissionFileChange: (file: File | null) => void;
+  onSubmissionArchiveFileChange: (file: File | null) => void;
+  onSubmissionReportFileChange: (file: File | null) => void;
   onUploadSubmission: () => void;
   onPreviewSubmissionArchive: () => void;
   onSubmissionSelect: (id: number) => void;
@@ -1838,16 +1900,29 @@ function StudentWorkspace(props: {
                     Архив работы
                     <input
                       type="file"
-                      accept=".zip,.doc,.docx,.txt,.geojson"
-                      onChange={(event) => props.onSubmissionFileChange(event.target.files?.[0] ?? null)}
+                      accept=".zip"
+                      onChange={(event) => props.onSubmissionArchiveFileChange(event.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                  <label>
+                    DOCX-отчёт
+                    <input
+                      type="file"
+                      accept=".docx"
+                      onChange={(event) => props.onSubmissionReportFileChange(event.target.files?.[0] ?? null)}
                     />
                   </label>
                   <button className="primary" onClick={props.onUploadSubmission} disabled={props.isLoading}>
                     Сдать работу
                   </button>
-                  <button onClick={props.onPreviewSubmissionArchive} disabled={props.isLoading || !props.hasSubmissionFile}>
+                  <button onClick={props.onPreviewSubmissionArchive} disabled={props.isLoading || !props.submissionFileIsArchive}>
                     Проверить на карте
                   </button>
+                  {props.hasSubmissionFile ? (
+                    <div className="muted">
+                      Выбрано: {[props.submissionArchiveFile?.name, props.submissionReportFile?.name].filter(Boolean).join(", ")}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </section>
@@ -1896,7 +1971,7 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
 
   async function uploadMaterial() {
     if (!materialFile) {
-      setMessage("Выберите GeoJSON или ZIP со слоями.");
+      setMessage("Выберите ZIP-архив со слоями.");
       return;
     }
 
@@ -1933,10 +2008,10 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
       </div>
       <div className="upload-row">
         <label>
-          GeoJSON / ZIP со слоями или QGIS-проектом
+          ZIP со слоями или QGIS-проектом
           <input
             type="file"
-            accept=".geojson,.zip"
+            accept=".zip"
             onChange={(event) => setMaterialFile(event.target.files?.[0] ?? null)}
           />
         </label>
@@ -1950,7 +2025,7 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
           <div key={material.id}>
             <strong>{layerDisplayName(material.material_name)}</strong>
             <span>
-              {material.detected_format} · {statusLabel(material.status)}
+              {formatDetectedFormat(material.detected_format)} · {statusLabel(material.status)}
             </span>
           </div>
         ))}

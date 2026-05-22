@@ -15,6 +15,10 @@ IGNORED_ARCHIVE_SUFFIXES = {
     ".lock",
     ".sr.lock",
 }
+IGNORED_ARCHIVE_NAMES = {
+    "style-manifest.json",
+}
+MOJIBAKE_MARKERS = ("Ð", "Ñ", "Р", "С", "Å", "α", "Γ", "τ", "�")
 
 
 def _should_ignore_archive_file(filename: str) -> bool:
@@ -27,7 +31,47 @@ def _should_ignore_archive_file(filename: str) -> bool:
     - *.lock
     """
     lower_name = Path(filename).name.lower()
-    return any(lower_name.endswith(suffix) for suffix in IGNORED_ARCHIVE_SUFFIXES)
+    return lower_name in IGNORED_ARCHIVE_NAMES or any(lower_name.endswith(suffix) for suffix in IGNORED_ARCHIVE_SUFFIXES)
+
+
+def _cyrillic_count(value: str) -> int:
+    return sum(1 for char in value if "\u0400" <= char <= "\u04ff")
+
+
+def _mojibake_score(value: str) -> int:
+    return sum(value.count(marker) for marker in MOJIBAKE_MARKERS)
+
+
+def repair_zip_member_name(filename: str) -> str:
+    """
+    ZIP-файлы из Windows/GIS-софта иногда хранят кириллицу в CP866 без UTF-8 flag.
+    zipfile тогда декодирует имя как CP437, и в UI получается "Åαá..." вместо русского имени.
+    """
+    candidates = [filename]
+    for source_encoding in ("cp437", "latin1"):
+        try:
+            raw = filename.encode(source_encoding)
+        except UnicodeEncodeError:
+            continue
+        for target_encoding in ("utf-8", "cp866", "cp1251"):
+            try:
+                candidates.append(raw.decode(target_encoding))
+            except UnicodeDecodeError:
+                continue
+
+    return max(
+        candidates,
+        key=lambda value: (
+            _cyrillic_count(value),
+            -_mojibake_score(value),
+            -value.count("?"),
+            value == filename,
+        ),
+    )
+
+
+def _display_basename(filename: str) -> str:
+    return Path(repair_zip_member_name(filename)).name
 
 
 def parse_submission_archive(file_bytes: bytes) -> list[dict]:
@@ -64,7 +108,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
         consumed_files: set[str] = set()
 
         for archive_name in all_files.keys():
-            basename = Path(archive_name).name
+            basename = _display_basename(archive_name)
             suffix = Path(basename).suffix.lower()
             stem = Path(basename).stem.lower()
 
@@ -89,7 +133,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
 
             with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as layer_zip:
                 for archive_name in sorted(group_files):
-                    inner_name = Path(archive_name).name
+                    inner_name = _display_basename(archive_name)
                     layer_zip.writestr(inner_name, all_files[archive_name])
                     consumed_files.add(archive_name)
 
@@ -110,7 +154,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
             if archive_name in consumed_files:
                 continue
 
-            basename = Path(archive_name).name
+            basename = _display_basename(archive_name)
             suffix = Path(basename).suffix.lower()
 
             if suffix == ".geojson":
@@ -132,7 +176,7 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
             if archive_name in consumed_files:
                 continue
 
-            basename = Path(archive_name).name
+            basename = _display_basename(archive_name)
             suffix = Path(basename).suffix.lower()
 
             if suffix in REPORT_EXTENSIONS:
@@ -163,14 +207,6 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
             basename = Path(archive_name).name
             suffix = Path(basename).suffix.lower()
 
-            result.append({
-                "asset_name": basename,
-                "asset_type": "other",
-                "detected_format": suffix.lstrip(".") if suffix else "unknown",
-                "status": "uploaded",
-                "message": f"Файл '{basename}' не был классифицирован как layer/report.",
-                "file_bytes": data,
-                "group_key": None,
-            })
+            consumed_files.add(archive_name)
 
     return result

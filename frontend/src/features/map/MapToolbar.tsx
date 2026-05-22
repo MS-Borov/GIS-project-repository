@@ -1,6 +1,6 @@
 import { ZoomToSelectionIcon } from "../../shared/ui/ToolbarIcons";
 
-export type MapEditMode = "select" | "point" | "line" | "polygon" | "aiBox";
+export type MapEditMode = "select" | "point" | "line" | "polygon" | "aiBox" | "measure";
 export type MapBasemapMode = "osm" | "satellite" | "none";
 
 export type MapSnapSettings = {
@@ -38,6 +38,7 @@ type MapToolbarProps = {
   basemapMode: MapBasemapMode;
   mapZoom: number;
   mapScaleText: string;
+  measureDistanceText: string;
   isRussiaExtentLocked: boolean;
   coordinateProjection: string;
   coordinateProjections: CoordinateProjectionOption[];
@@ -55,7 +56,6 @@ type MapToolbarProps = {
   onRedoDraftChange: () => void;
   onToggleDraftProperties: () => void;
   onToggleDraftTable: () => void;
-  onExportDraftLayer: () => void;
   onExportShapefileArchive: () => void;
   onExportMapPng: () => void;
   onBasemapModeChange: (mode: MapBasemapMode) => void;
@@ -134,6 +134,14 @@ export function MapToolbar(props: MapToolbarProps) {
         data-tooltip="Увеличить до выделенного объекта"
       >
         <ZoomToSelectionIcon />
+      </button>
+      <button
+        className={props.editMode === "measure" ? "active" : ""}
+        onClick={() => props.onEditModeChange("measure")}
+        title="Измерить расстояние"
+        data-tooltip="Измерить расстояние"
+      >
+        ⇔
       </button>
       <button
         onClick={props.onDeleteSelectedDraftFeature}
@@ -240,11 +248,8 @@ export function MapToolbar(props: MapToolbarProps) {
       >
         ▦
       </button>
-      <button onClick={props.onExportDraftLayer} disabled={props.draftFeatureCount === 0} title="Экспортировать GeoJSON" data-tooltip="Экспортировать GeoJSON">
-        GeoJSON
-      </button>
-      <button onClick={props.onExportShapefileArchive} disabled={props.isDraftBusy} title="Экспортировать ZIP с Shapefile-слоями" data-tooltip="Экспортировать ZIP с Shapefile-слоями">
-        SHP ZIP
+      <button onClick={props.onExportShapefileArchive} disabled={props.isDraftBusy} title="Экспортировать архив работы" data-tooltip="Экспортировать архив работы">
+        Архив
       </button>
       <button onClick={props.onExportMapPng} title="Экспортировать карту в PNG" data-tooltip="Экспортировать карту в PNG">
         PNG
@@ -335,6 +340,7 @@ export function MapToolbar(props: MapToolbarProps) {
           ? `Редактируемый слой: ${props.activeEditableLayerName} · ${props.activeDraftFeatureCount}/${props.draftFeatureCount}`
           : `Редактируемый слой не выбран · ${props.draftFeatureCount} объектов`}
       </span>
+      {props.measureDistanceText ? <span className="measure-output">Линейка: {props.measureDistanceText}</span> : null}
     </div>
   );
 }

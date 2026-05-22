@@ -88,6 +88,7 @@ export type LayerClassificationSettings = {
 };
 
 export type LayerStyleSettings = {
+  geometryKind?: "point" | "line" | "polygon" | "mixed" | "unknown" | null;
   strokeColor: string;
   fillColor: string;
   fillOpacity: number;
@@ -151,6 +152,7 @@ export function defaultLayerStyle(index: number): LayerStyleSettings {
 export function normalizeLayerStyle(style: Partial<LayerStyleSettings> | undefined, index: number): LayerStyleSettings {
   const fallback = defaultLayerStyle(index);
   return {
+    geometryKind: style?.geometryKind ?? fallback.geometryKind ?? null,
     strokeColor: style?.strokeColor || fallback.strokeColor,
     fillColor: style?.fillColor || fallback.fillColor,
     fillOpacity: Math.min(1, Math.max(0, Number(style?.fillOpacity ?? fallback.fillOpacity))),
@@ -708,43 +710,14 @@ export function legendSymbolType(
     return classItem.symbolType;
   }
   const label = normalizeClassValue(`${classItem?.label ?? ""} ${classItem?.value ?? ""}`);
-  if (geometryKind === "line") {
-    if (label.includes("одноколей")) {
-      return "rail-single";
-    }
-    if (label.includes("ж/д") || label.includes("желез")) {
-      return "rail";
-    }
-    if (label.includes("с покрытием") || label.includes("асфальт")) {
-      return "cased-road";
-    }
-    if (label.includes("грунтов")) {
-      return "dirt-road";
-    }
-    if (label.includes("просел")) {
-      return "local-road";
-    }
-    if (label.includes("полевая") || label.includes("лесная")) {
-      return "track-road";
-    }
-    if (label.includes("просек")) {
-      return "clearing-line";
-    }
-    if (label.includes("dry up") || label.includes("пересых")) {
-      return "dry-water";
-    }
-    if (label.includes("river") || label.includes("река")) {
-      return "river-line";
-    }
-    if (label.includes("chan") || label.includes("канал")) {
-      return "canal-line";
-    }
-    if (classItem?.lineStyle === "dot") {
-      return "dot-line";
-    }
-    if (classItem?.lineStyle === "dash") {
-      return "dash-line";
-    }
+  const inferredLineSymbol = lineSymbolTypeFromLegendLabel(label, classItem);
+  if (geometryKind === "line" || inferredLineSymbol) {
+    return inferredLineSymbol ?? "line";
+  }
+  if (geometryKind === "mixed" && classItem?.lineStyle) {
+    return classItem.lineStyle === "dot" ? "dot-line" : "dash-line";
+  }
+  if (geometryKind === "mixed" && label === "(empty)") {
     return "line";
   }
   if (geometryKind === "point") {
@@ -754,6 +727,46 @@ export function legendSymbolType(
     return "polygon";
   }
   return "mixed";
+}
+
+function lineSymbolTypeFromLegendLabel(label: string, classItem?: LayerClassificationClass | null) {
+  if (label.includes("одноколей")) {
+    return "rail-single";
+  }
+  if (label.includes("ж/д") || label.includes("желез")) {
+    return "rail";
+  }
+  if (label.includes("с покрытием") || label.includes("асфальт")) {
+    return "cased-road";
+  }
+  if (label.includes("грунтов")) {
+    return "dirt-road";
+  }
+  if (label.includes("просел")) {
+    return "local-road";
+  }
+  if (label.includes("полевая") || label.includes("лесная")) {
+    return "track-road";
+  }
+  if (label.includes("просек")) {
+    return "clearing-line";
+  }
+  if (label.includes("dry up") || label.includes("пересых")) {
+    return "dry-water";
+  }
+  if (label.includes("river") || label.includes("река")) {
+    return "river-line";
+  }
+  if (label.includes("chan") || label.includes("канал")) {
+    return "canal-line";
+  }
+  if (classItem?.lineStyle === "dot") {
+    return "dot-line";
+  }
+  if (classItem?.lineStyle === "dash") {
+    return "dash-line";
+  }
+  return null;
 }
 
 export function LegendClassSymbol(props: {

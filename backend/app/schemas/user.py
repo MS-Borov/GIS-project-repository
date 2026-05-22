@@ -27,6 +27,11 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    email: str | None = Field(default=None, min_length=3, max_length=255)
+    full_name: str | None = Field(default=None, max_length=255)
+
+
 class UserRead(BaseModel):
     id: int
     email: str

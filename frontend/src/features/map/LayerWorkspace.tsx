@@ -24,7 +24,6 @@ import {
   isPreviewableAsset,
   layerDisplayName,
   layerMatchKey,
-  normalizeGeoJsonFeatureCollection,
   openMapViewer,
   qgisLayerForAsset,
   qgisLayerOrder,
@@ -72,6 +71,23 @@ function styleManifestLayerForAsset(
   }) ?? null;
 }
 
+function styleManifestGroupKey(layer: LayerStyleManifestLayer | null, fallbackName: string) {
+  if (layer?.source_layer_id !== null && layer?.source_layer_id !== undefined) {
+    return `source:${layer.source_layer_id}`;
+  }
+  return `name:${styleManifestMatchKey(layer?.source_layer_name || layer?.alias || fallbackName)}`;
+}
+
+type RestoredDraftLayer = {
+  assetId: number;
+  name: string;
+  groupName?: string | null;
+  style?: Partial<LayerStyleSettings> | null;
+  fields?: string[];
+  geometryType?: string | null;
+  crs?: string | null;
+};
+
 export function LayerWorkspace(props: {
   selectedSubmissionId: number | null;
   workspaceAssignment?: Assignment | null;
@@ -80,6 +96,7 @@ export function LayerWorkspace(props: {
   assets: SubmissionAsset[];
   preloadedPreviews?: GeoJsonPreview[];
   qgisProject?: QgisProjectMetadata | null;
+  styleManifest?: LayerStyleManifest | null;
   isLoading: boolean;
   onSubmissionSelect: (id: number) => void;
   onFetchAssetPreview: (assetId: number) => Promise<GeoJsonPreview>;
@@ -120,6 +137,7 @@ export function LayerWorkspace(props: {
   const [isTableWindowOpen, setIsTableWindowOpen] = useState(false);
   const [isDraftEditingEnabled, setIsDraftEditingEnabled] = useState(false);
   const [activeEditableLayerId, setActiveEditableLayerId] = useState<number | null>(null);
+  const [selectedLayerId, setSelectedLayerId] = useState<number | null>(null);
   const [zoomToLayerId, setZoomToLayerId] = useState<number | null>(null);
   const [zoomToLayerTick, setZoomToLayerTick] = useState(0);
   const [localLayerStatus, setLocalLayerStatus] = useState<string | null>(null);
@@ -193,6 +211,9 @@ export function LayerWorkspace(props: {
   const allLoadedLayersVisible = layers.length > 0 && layers.every((layer) => layer.visible);
   const activeEditableLayer = activeEditableLayerId
     ? layers.find((layer) => layer.asset.id === activeEditableLayerId) ?? null
+    : null;
+  const selectedLayerForEditing = selectedLayerId !== null
+    ? orderedAssets.find((asset) => asset.id === selectedLayerId) ?? null
     : null;
   const allLayerGroupNames = Array.from(
     new Set([DEFAULT_LAYER_GROUP, ...layerGroupNames, ...orderedAssets.map((asset) => layerGroups[asset.id] ?? DEFAULT_LAYER_GROUP)]),
@@ -284,18 +305,23 @@ export function LayerWorkspace(props: {
   }, [editingGroupName]);
 
   useEffect(() => {
-    if (!qgisProject?.layers?.length || previewableAssets.length === 0) {
+    if ((!qgisProject?.layers?.length && !props.styleManifest?.layers?.length) || previewableAssets.length === 0) {
       return;
     }
     const nextAliases: Record<number, string> = {};
     const nextStyles: Record<number, LayerStyleSettings> = {};
     previewableAssets.forEach((asset, index) => {
       const qgisLayer = qgisLayerForAsset(qgisProject, asset);
+      const manifestLayer = styleManifestLayerForAsset(props.styleManifest, asset);
       if (qgisLayer?.name) {
         nextAliases[asset.id] = qgisLayer.name;
+      } else if (manifestLayer?.alias || manifestLayer?.source_layer_name) {
+        nextAliases[asset.id] = manifestLayer.alias || manifestLayer.source_layer_name!;
       }
       if (qgisLayer?.style) {
         nextStyles[asset.id] = normalizeLayerStyle(qgisLayer.style, index);
+      } else if (manifestLayer?.style) {
+        nextStyles[asset.id] = normalizeLayerStyle(manifestLayer.style, index);
       }
     });
     setLayerAliases((current) => ({ ...current, ...nextAliases }));
@@ -310,7 +336,7 @@ export function LayerWorkspace(props: {
         })
         .sort((left, right) => qgisLayerOrder(qgisProject, left.asset) - qgisLayerOrder(qgisProject, right.asset)),
     );
-  }, [qgisProject, previewableAssetKey]);
+  }, [qgisProject, props.styleManifest, previewableAssetKey]);
 
   async function loadLayer(asset: SubmissionAsset) {
     if (layers.some((layer) => layer.asset.id === asset.id || layerMatchKey(layer.asset.asset_name) === layerMatchKey(asset.asset_name))) {
@@ -336,13 +362,21 @@ export function LayerWorkspace(props: {
         props.preloadedPreviews?.find((item) => item.asset_id === asset.id) ??
         (await props.onFetchAssetPreview(asset.id));
       const qgisLayer = qgisLayerForAsset(qgisProject, asset);
+      const manifestLayer = styleManifestLayerForAsset(props.styleManifest, asset);
       if (qgisLayer?.name) {
         setLayerAliases((current) => ({ ...current, [asset.id]: current[asset.id] ?? qgisLayer.name }));
+      } else if (manifestLayer?.alias || manifestLayer?.source_layer_name) {
+        setLayerAliases((current) => ({ ...current, [asset.id]: current[asset.id] ?? manifestLayer.alias ?? manifestLayer.source_layer_name! }));
       }
       if (qgisLayer?.style) {
         setLayerStyles((current) => ({
           ...current,
           [asset.id]: normalizeLayerStyle(qgisLayer.style ?? undefined, previewableAssets.findIndex((item) => item.id === asset.id)),
+        }));
+      } else if (manifestLayer?.style) {
+        setLayerStyles((current) => ({
+          ...current,
+          [asset.id]: normalizeLayerStyle(manifestLayer.style ?? undefined, previewableAssets.findIndex((item) => item.id === asset.id)),
         }));
       }
       setLayers((current) => [
@@ -627,6 +661,21 @@ export function LayerWorkspace(props: {
     bringWindowToFront("symbolEditor");
   }
 
+  async function enableSelectedLayerEditing() {
+    if (!selectedLayerId) {
+      return;
+    }
+    const asset = orderedAssets.find((item) => item.id === selectedLayerId);
+    if (!asset) {
+      return;
+    }
+    if (!layers.some((layer) => layer.asset.id === selectedLayerId)) {
+      await loadLayer(asset);
+    }
+    setActiveEditableLayerId(selectedLayerId);
+    setIsDraftEditingEnabled(true);
+  }
+
   function groupAssignedCrsValue(groupName: string) {
     const groupAssetIds = orderedAssets
       .filter((asset) => (layerGroups[asset.id] ?? DEFAULT_LAYER_GROUP) === groupName)
@@ -692,6 +741,7 @@ export function LayerWorkspace(props: {
     setLayers((current) => current.filter((layer) => layer.asset.id !== assetId));
     setRemovedLayerIds((current) => (current.includes(assetId) ? current : [...current, assetId]));
     setHiddenLayerIds((current) => current.filter((id) => id !== assetId));
+    setSelectedLayerId((current) => (current === assetId ? null : current));
     setSelectedFeature((current) => (current?.assetId === assetId ? null : current));
     setLayerPropertiesId((current) => (current === assetId ? null : current));
     setTableLayerId((current) => (current === assetId ? null : current));
@@ -723,6 +773,7 @@ export function LayerWorkspace(props: {
     setLayers((current) =>
       current.map((layer) => (layer.asset.id === assetId ? { ...layer, visible: false } : layer)),
     );
+    setSelectedLayerId((current) => (current === assetId ? null : current));
     setSelectedFeature((current) => (current?.assetId === assetId ? null : current));
     setLayerPropertiesId((current) => (current === assetId ? null : current));
     setTableLayerId((current) => (current === assetId ? null : current));
@@ -752,6 +803,7 @@ export function LayerWorkspace(props: {
     if (preview.geojson.features.length > 0) {
       setSelectedFeature({ assetId: asset.id, featureIndex: 0 });
     }
+    setSelectedLayerId(asset.id);
   }
 
   function createEmptyEditableLayer() {
@@ -772,7 +824,7 @@ export function LayerWorkspace(props: {
     const asset: SubmissionAsset = {
       id: assetId,
       submission_id: 0,
-      asset_name: `${name}.geojson`,
+      asset_name: `${name}.zip`,
       asset_type: "layer",
       detected_format: "geojson",
       status: "uploaded",
@@ -791,6 +843,7 @@ export function LayerWorkspace(props: {
     };
     addLocalPreviewLayer(asset, preview, groupName);
     setLayerAliases((current) => ({ ...current, [assetId]: name }));
+    setSelectedLayerId(assetId);
     setActiveEditableLayerId(assetId);
     setIsDraftEditingEnabled(true);
     setTableLayerId(assetId);
@@ -799,39 +852,67 @@ export function LayerWorkspace(props: {
     setLocalLayerStatus(`Создан пустой слой «${name}».`);
   }
 
+  function restoreDraftLayers(restoredLayers: RestoredDraftLayer[]) {
+    if (restoredLayers.length === 0) {
+      return;
+    }
+    rememberLayerLayout();
+    let restoredCount = 0;
+    restoredLayers.forEach((restoredLayer) => {
+      if (layers.some((layer) => layer.asset.id === restoredLayer.assetId)) {
+        return;
+      }
+      const groupName = restoredLayer.groupName || LOCAL_LAYER_GROUP;
+      const asset: SubmissionAsset = {
+        id: restoredLayer.assetId,
+        submission_id: 0,
+        asset_name: `${restoredLayer.name}.zip`,
+        asset_type: "layer",
+        detected_format: "geojson",
+        status: "uploaded",
+        message: "Локальный слой восстановлен из черновика.",
+      };
+      const preview: GeoJsonPreview = {
+        asset_id: restoredLayer.assetId,
+        asset_name: asset.asset_name,
+        detected_format: "geojson",
+        source_crs: restoredLayer.crs || "EPSG:4326",
+        crs: restoredLayer.crs || "EPSG:4326",
+        feature_count: 0,
+        preview_feature_count: 0,
+        truncated: false,
+        geojson: { type: "FeatureCollection", features: [] },
+      };
+      setLayerGroupNames((current) => (current.includes(groupName) ? current : [...current, groupName]));
+      setLayerGroups((current) => ({ ...current, [asset.id]: groupName }));
+      setLayers((current) => (current.some((layer) => layer.asset.id === asset.id) ? current : [
+        ...current,
+        {
+          asset,
+          preview,
+          visible: true,
+          labelsVisible: false,
+          labelField: null,
+        },
+      ]));
+      setHiddenLayerIds((current) => current.filter((id) => id !== asset.id));
+      setRemovedLayerIds((current) => current.filter((id) => id !== asset.id));
+      setLayerAliases((current) => ({ ...current, [asset.id]: current[asset.id] ?? restoredLayer.name }));
+      if (restoredLayer.style) {
+        setLayerStyles((current) => ({ ...current, [asset.id]: normalizeLayerStyle(restoredLayer.style ?? undefined, layers.length + restoredCount) }));
+      }
+      restoredCount += 1;
+    });
+    if (restoredCount > 0) {
+      setLocalLayerStatus(`Восстановлено слоёв из черновика: ${restoredCount}.`);
+    }
+  }
+
   async function loadLocalLayerFile(file: File) {
     setLocalLayerStatus(`Загрузка слоя «${file.name}»...`);
     try {
-      if (file.name.toLowerCase().endsWith(".geojson") || file.type.includes("json")) {
-        const geojson = normalizeGeoJsonFeatureCollection(JSON.parse(await file.text()));
-        const assetId = -Date.now();
-        const asset: SubmissionAsset = {
-          id: assetId,
-          submission_id: 0,
-          asset_name: file.name,
-          asset_type: "layer",
-          detected_format: "geojson",
-          status: "uploaded",
-          message: "Локальный GeoJSON загружен в рабочую карту.",
-        };
-        const preview: GeoJsonPreview = {
-          asset_id: assetId,
-          asset_name: file.name,
-          detected_format: "geojson",
-          source_crs: "EPSG:4326",
-          crs: "EPSG:4326",
-          feature_count: geojson.features.length,
-          preview_feature_count: geojson.features.length,
-          truncated: false,
-          geojson,
-        };
-        addLocalPreviewLayer(asset, preview);
-        setLocalLayerStatus(`Локальный GeoJSON загружен: ${geojson.features.length} объектов.`);
-        return;
-      }
-
       if (!file.name.toLowerCase().endsWith(".zip")) {
-        throw new Error("Пока поддерживаются GeoJSON и ZIP с GIS-слоями.");
+        throw new Error("Пока поддерживаются ZIP-архивы с ГИС-слоями.");
       }
       if (!workspaceAssignmentId) {
         throw new Error("Для ZIP-preview нужен открытый workspace задания.");
@@ -848,11 +929,29 @@ export function LayerWorkspace(props: {
 
       let loadedCount = 0;
       const localAssets = uniqueLayerAssets(archivePreview.assets.filter(isPreviewableAsset), archivePreview.qgis_project);
+      const pendingLocalLayers: Array<{
+        asset: SubmissionAsset;
+        preview: GeoJsonPreview;
+        manifestLayer: LayerStyleManifestLayer | null;
+        qgisLayer: ReturnType<typeof qgisLayerForAsset>;
+      }> = [];
+      const pendingLocalLayerByKey = new Map<string, (typeof pendingLocalLayers)[number]>();
       for (const asset of localAssets) {
         const tempPreview = await storedAuthFetchJson<GeoJsonPreview>(
           `/submissions/archive-preview/${archivePreview.preview_token}/assets/${asset.id}/geojson-preview?${RUSSIA_PREVIEW_QUERY}`,
         );
-        const assetId = -(Date.now() + asset.id + loadedCount);
+        const manifestLayer = styleManifestLayerForAsset(archivePreview.style_manifest, asset);
+        const pendingKey = styleManifestGroupKey(manifestLayer, asset.asset_name);
+        const existingPendingLayer = manifestLayer ? pendingLocalLayerByKey.get(pendingKey) : null;
+        if (existingPendingLayer) {
+          existingPendingLayer.preview.geojson.features.push(...tempPreview.geojson.features);
+          existingPendingLayer.preview.feature_count += tempPreview.feature_count;
+          existingPendingLayer.preview.preview_feature_count += tempPreview.preview_feature_count;
+          existingPendingLayer.preview.truncated = existingPendingLayer.preview.truncated || tempPreview.truncated;
+          continue;
+        }
+
+        const assetId = -(Date.now() + asset.id + pendingLocalLayers.length);
         const localAsset = {
           ...asset,
           id: assetId,
@@ -862,19 +961,31 @@ export function LayerWorkspace(props: {
           message: "Локальный ZIP-слой загружен в рабочую карту.",
         };
         const qgisLayer = qgisLayerForAsset(archivePreview.qgis_project, asset);
-        const manifestLayer = styleManifestLayerForAsset(archivePreview.style_manifest, asset);
-        addLocalPreviewLayer(localAsset, {
-          ...tempPreview,
-          asset_id: assetId,
-          asset_name: localAsset.asset_name,
-        }, manifestLayer?.group_name || LOCAL_LAYER_GROUP);
-        const layerAlias = manifestLayer?.alias || manifestLayer?.source_layer_name || qgisLayer?.name;
-        if (layerAlias) {
-          setLayerAliases((current) => ({ ...current, [assetId]: layerAlias }));
+        const pendingLayer = {
+          asset: localAsset,
+          preview: {
+            ...tempPreview,
+            asset_id: assetId,
+            asset_name: localAsset.asset_name,
+          },
+          manifestLayer,
+          qgisLayer,
+        };
+        pendingLocalLayers.push(pendingLayer);
+        if (manifestLayer) {
+          pendingLocalLayerByKey.set(pendingKey, pendingLayer);
         }
-        const layerStyle = manifestLayer?.style || qgisLayer?.style;
+      }
+
+      for (const pendingLayer of pendingLocalLayers) {
+        addLocalPreviewLayer(pendingLayer.asset, pendingLayer.preview, pendingLayer.manifestLayer?.group_name || LOCAL_LAYER_GROUP);
+        const layerAlias = pendingLayer.manifestLayer?.alias || pendingLayer.manifestLayer?.source_layer_name || pendingLayer.qgisLayer?.name;
+        if (layerAlias) {
+          setLayerAliases((current) => ({ ...current, [pendingLayer.asset.id]: layerAlias }));
+        }
+        const layerStyle = pendingLayer.manifestLayer?.style || pendingLayer.qgisLayer?.style;
         if (layerStyle) {
-          setLayerStyles((current) => ({ ...current, [assetId]: normalizeLayerStyle(layerStyle ?? undefined, loadedCount) }));
+          setLayerStyles((current) => ({ ...current, [pendingLayer.asset.id]: normalizeLayerStyle(layerStyle ?? undefined, loadedCount) }));
         }
         loadedCount += 1;
       }
@@ -899,7 +1010,7 @@ export function LayerWorkspace(props: {
     const directFiles = files.filter((file) => !SHAPEFILE_PART_EXTENSIONS.has(fileExtension(file.name)));
 
     for (const file of directFiles) {
-      if (file.name.toLowerCase().endsWith(".geojson") || file.name.toLowerCase().endsWith(".json") || file.name.toLowerCase().endsWith(".zip")) {
+      if (file.name.toLowerCase().endsWith(".zip")) {
         await loadLocalLayerFile(file);
       }
     }
@@ -1249,7 +1360,7 @@ export function LayerWorkspace(props: {
               ref={localLayerInputRef}
               type="file"
               className="visually-hidden"
-              accept=".geojson,.json,.zip,.shp,.dbf,.shx,.prj,.cpg,.qix,.sbn,.sbx"
+              accept=".zip,.shp,.dbf,.shx,.prj,.cpg,.qix,.sbn,.sbx"
               multiple
               onChange={(event) => {
                 if (event.target.files?.length) {
@@ -1353,7 +1464,7 @@ export function LayerWorkspace(props: {
             {localLayerStatus ? <p className="layer-status">{localLayerStatus}</p> : null}
 
             {previewableAssets.length === 0 ? (
-              <p className="muted">В выбранной сдаче нет GeoJSON или Shapefile ZIP-слоёв для карты.</p>
+              <p className="muted">В выбранной сдаче нет слоёв для карты.</p>
             ) : null}
             {previewableAssets.length > 0 && visiblePreviewableAssets.length === 0 ? (
               <p className="muted">Все слои скрыты из текущего списка.</p>
@@ -1489,17 +1600,19 @@ export function LayerWorkspace(props: {
               const layerIndex = layers.findIndex((item) => item.asset.id === asset.id);
               const isLoadedLocalLayer = asset.submission_id === 0 || asset.id < 0;
               const layerStyle = normalizeLayerStyle(layerStyles[asset.id], layerIndex);
-              const geometryKind = layerGeometryKind(layer?.preview);
+              const geometryKind = layerStyle.geometryKind ?? layerGeometryKind(layer?.preview);
               const isLoadingLayer = loadingLayerIds.includes(asset.id);
               const fields = layer ? previewAttributeFields(layer.preview) : [];
               const displayName = layerAliases[asset.id] || layerDisplayName(asset.asset_name);
               const isActiveEditableLayer = activeEditableLayerId === asset.id && isDraftEditingEnabled;
+              const isSelectedLayer = selectedLayerId === asset.id;
               return (
                 <div
                   key={asset.id}
                   className={[
                     "layer-row",
                     layer?.visible ? "active" : "",
+                    isSelectedLayer ? "selected" : "",
                     isActiveEditableLayer ? "editing" : "",
                     layer || isLoadedLocalLayer ? "draggable" : "",
                     draggedLayerId === asset.id ? "dragging" : "",
@@ -1515,8 +1628,10 @@ export function LayerWorkspace(props: {
                   }}
                   onDrop={() => (layer || isLoadedLocalLayer ? dropLayer(asset.id) : undefined)}
                   onDragEnd={() => setDraggedLayerId(null)}
+                  onClick={() => setSelectedLayerId(asset.id)}
                   onContextMenu={(event) => {
                     event.preventDefault();
+                    setSelectedLayerId(asset.id);
                     if (!layer) {
                       void loadLayer(asset);
                       return;
@@ -1525,7 +1640,11 @@ export function LayerWorkspace(props: {
                   }}
                 >
                   <div className="layer-row-main">
-                    <label className="layer-visibility-toggle" title="Видимость слоя">
+                    <label
+                      className="layer-visibility-toggle"
+                      title="Видимость слоя"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={Boolean(layer?.visible)}
@@ -1572,7 +1691,7 @@ export function LayerWorkspace(props: {
                       )}
                       <small>{isActiveEditableLayer ? "Редактируется" : statusLabel(asset.status)}</small>
                     </div>
-                    <div className="layer-row-tools">
+                    <div className="layer-row-tools" onClick={(event) => event.stopPropagation()}>
                       <button onClick={() => void loadLayer(asset)} disabled={isLoadingLayer} title={layer ? "Обновить слой" : "Открыть слой"}>
                         {layer ? "↻" : isLoadingLayer ? "..." : "+"}
                       </button>
@@ -1782,7 +1901,12 @@ export function LayerWorkspace(props: {
           {symbolEditor && symbolEditorLayer && symbolEditorClass ? (
             <SymbolEditorWindow
               layerName={layerAliases[symbolEditorLayer.asset.id] || layerDisplayName(symbolEditorLayer.asset.asset_name)}
-              geometryKind={layerGeometryKind(symbolEditorLayer.preview)}
+              geometryKind={
+                normalizeLayerStyle(
+                  layerStyles[symbolEditorLayer.asset.id],
+                  layers.findIndex((layer) => layer.asset.id === symbolEditorLayer.asset.id),
+                ).geometryKind ?? layerGeometryKind(symbolEditorLayer.preview)
+              }
               classItem={symbolEditorClass}
               position={symbolEditor.position}
               zIndex={windowZIndexes.symbolEditor}
@@ -1804,16 +1928,26 @@ export function LayerWorkspace(props: {
             }
             isDraftEditingEnabled={isDraftEditingEnabled}
             onDraftEditingEnabledChange={setIsDraftEditingEnabled}
+            onRequestSelectedLayerEditing={enableSelectedLayerEditing}
+            selectedLayerForEditingId={selectedLayerId}
+            selectedLayerForEditingName={
+              selectedLayerForEditing
+                ? layerAliases[selectedLayerForEditing.id] || layerDisplayName(selectedLayerForEditing.asset_name)
+                : null
+            }
             zoomToLayerId={zoomToLayerId}
             zoomToLayerTick={zoomToLayerTick}
             tableLayerId={tableLayerId}
             layerAliases={layerAliases}
+            layerGroups={layerGroups}
+            onRestoreDraftLayers={restoreDraftLayers}
             isTableWindowOpen={isTableWindowOpen}
             selectedFeature={selectedFeature}
             onFeatureSelect={setSelectedFeature}
             onLayerFeatureAttributeChange={updateLayerFeatureAttribute}
             onLayerAttributeFieldAdd={addLayerAttributeField}
             onLayerAttributeFieldRemove={removeLayerAttributeField}
+            removedLayerIds={removedLayerIds}
             windowZIndexes={windowZIndexes}
             onWindowFocus={bringWindowToFront}
             onCloseTable={() => setIsTableWindowOpen(false)}
@@ -1829,3 +1963,5 @@ export function LayerWorkspace(props: {
     </section>
   );
 }
+
+

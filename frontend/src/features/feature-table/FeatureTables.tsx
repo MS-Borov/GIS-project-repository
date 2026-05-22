@@ -7,6 +7,17 @@ import type { SelectedLayerFeature, ZoomSelectionTarget } from "../map/selection
 import { ZoomToSelectionIcon } from "../../shared/ui/ToolbarIcons";
 
 type SortDirection = "asc" | "desc";
+export type AttributeFieldType = "text" | "number" | "integer" | "boolean" | "date";
+
+const LEGACY_DRAFT_DEFAULT_FIELDS = new Set(["name", "description"]);
+
+export const ATTRIBUTE_FIELD_TYPES: Array<{ value: AttributeFieldType; label: string }> = [
+  { value: "text", label: "Текст" },
+  { value: "number", label: "Число" },
+  { value: "integer", label: "Целое" },
+  { value: "boolean", label: "Да/нет" },
+  { value: "date", label: "Дата" },
+];
 
 type GeoJsonFeature = {
   type: "Feature";
@@ -41,6 +52,14 @@ function layerDisplayName(assetName: string) {
   return assetName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
 }
 
+function isBlankAttributeValue(value: unknown) {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+function isLegacyDraftDefaultField(field: string) {
+  return LEGACY_DRAFT_DEFAULT_FIELDS.has(field.trim().toLowerCase());
+}
+
 function compareTableValues(left: unknown, right: unknown, direction: SortDirection) {
   const multiplier = direction === "asc" ? 1 : -1;
   const leftNumber = typeof left === "number" ? left : Number(left);
@@ -54,15 +73,174 @@ function compareTableValues(left: unknown, right: unknown, direction: SortDirect
 function nextSortDirection(current: SortDirection | null) {
   return current === "asc" ? "desc" : "asc";
 }
+
+function fieldInputType(type: AttributeFieldType | undefined) {
+  if (type === "number" || type === "integer") {
+    return "number";
+  }
+  if (type === "date") {
+    return "date";
+  }
+  return "text";
+}
+
+function formatFieldValueForInput(value: unknown, type: AttributeFieldType | undefined) {
+  if (type === "boolean") {
+    return value === true || value === "true" || value === "1" || value === 1 ? "true" : value === false || value === "false" || value === "0" || value === 0 ? "false" : "";
+  }
+  return String(value ?? "");
+}
+
+function FieldValueEditor(props: {
+  value: unknown;
+  type?: AttributeFieldType;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  if (props.type === "boolean") {
+    return (
+      <select
+        value={formatFieldValueForInput(props.value, props.type)}
+        onChange={(event) => props.onChange(event.target.value)}
+        onClick={(event) => event.stopPropagation()}
+        disabled={props.disabled}
+      >
+        <option value="">—</option>
+        <option value="true">Да</option>
+        <option value="false">Нет</option>
+      </select>
+    );
+  }
+
+  return (
+    <input
+      type={fieldInputType(props.type)}
+      step={props.type === "integer" ? "1" : undefined}
+      value={formatFieldValueForInput(props.value, props.type)}
+      onChange={(event) => props.onChange(event.target.value)}
+      onClick={(event) => event.stopPropagation()}
+      disabled={props.disabled}
+    />
+  );
+}
+
+function isAiDraftFeature(feature: Feature<Geometry>) {
+  return feature.get("source") === "ai_digitizer" || Boolean(feature.get("ai_suggestion_accepted"));
+}
+
+type AttributeExpression = {
+  field: string;
+  operator: "=" | "!=" | ">" | ">=" | "<" | "<=" | "contains";
+  value: string;
+};
+
+function stripExpressionToken(value: string) {
+  const trimmed = value.trim();
+  const quotePairs: Array<[string, string]> = [
+    ['"', '"'],
+    ["'", "'"],
+    ["`", "`"],
+    ["[", "]"],
+  ];
+  const pair = quotePairs.find(([left, right]) => trimmed.startsWith(left) && trimmed.endsWith(right));
+  return pair ? trimmed.slice(1, -1).trim() : trimmed;
+}
+
+function parseAttributeExpression(expression: string): AttributeExpression | null {
+  const normalized = expression.trim();
+  const match = normalized.match(/^(.+?)\s*(>=|<=|!=|<>|==|=|>|<|\bcontains\b)\s*(.+)$/i);
+  if (!match) {
+    return null;
+  }
+  const operator = match[2].toLowerCase() === "contains" ? "contains" : match[2] === "==" ? "=" : match[2] === "<>" ? "!=" : match[2];
+  return {
+    field: stripExpressionToken(match[1]),
+    operator: operator as AttributeExpression["operator"],
+    value: stripExpressionToken(match[3]),
+  };
+}
+
+function propertyValue(properties: Record<string, unknown>, field: string) {
+  const exactValue = properties[field];
+  if (exactValue !== undefined) {
+    return exactValue;
+  }
+  const normalizedField = field.toLowerCase();
+  const matchingKey = Object.keys(properties).find((key) => key.toLowerCase() === normalizedField);
+  return matchingKey ? properties[matchingKey] : undefined;
+}
+
+function matchesAttributeExpression(properties: Record<string, unknown>, expression: AttributeExpression) {
+  const actual = propertyValue(properties, expression.field);
+  const expected = expression.value;
+  const actualNumber = Number(actual);
+  const expectedNumber = Number(expected);
+  const canCompareAsNumber = Number.isFinite(actualNumber) && Number.isFinite(expectedNumber);
+
+  if (["<", "<=", ">", ">="].includes(expression.operator)) {
+    if (!canCompareAsNumber) {
+      return false;
+    }
+    if (expression.operator === ">") {
+      return actualNumber > expectedNumber;
+    }
+    if (expression.operator === ">=") {
+      return actualNumber >= expectedNumber;
+    }
+    if (expression.operator === "<") {
+      return actualNumber < expectedNumber;
+    }
+    return actualNumber <= expectedNumber;
+  }
+
+  const actualText = String(actual ?? "").trim().toLowerCase();
+  const expectedText = expected.trim().toLowerCase();
+  if (expression.operator === "contains") {
+    return actualText.includes(expectedText);
+  }
+  return expression.operator === "=" ? actualText === expectedText : actualText !== expectedText;
+}
+
+function AttributeExpressionBar(props: {
+  expression: string;
+  message: string;
+  onExpressionChange: (value: string) => void;
+  onRun: () => void;
+}) {
+  return (
+    <div className="feature-table-expression">
+      <label>
+        <span>Выражение</span>
+        <input
+          value={props.expression}
+          onChange={(event) => props.onExpressionChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              props.onRun();
+            }
+          }}
+          placeholder="TYPE = bog"
+        />
+      </label>
+      <button onClick={props.onRun} disabled={!props.expression.trim()}>Выделить</button>
+      <span className="feature-table-expression-message">{props.message || "Пример: TYPE = bog, NAME contains озеро, ID > 10"}</span>
+    </div>
+  );
+}
+
 export function DraftFeatureTable(props: {
   layerName: string;
   fields: string[];
+  fieldTypes: Record<string, AttributeFieldType>;
   features: Feature<Geometry>[];
   selectedFeature: Feature<Geometry> | null;
   onFeatureSelect: (index: number) => void;
   onAttributeChange: (index: number, key: string, value: string) => void;
   onAddField: (field: string) => void;
+  onAddFieldWithType?: (field: string, type: AttributeFieldType) => void;
   onRemoveField: (field: string) => void;
+  onFieldTypeChange?: (field: string, type: AttributeFieldType) => void;
   onClose: () => void;
   position: { x: number; y: number };
   zIndex: number;
@@ -71,9 +249,14 @@ export function DraftFeatureTable(props: {
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState<AttributeFieldType>("text");
   const [filterText, setFilterText] = useState("");
+  const [attributeExpression, setAttributeExpression] = useState("");
+  const [attributeExpressionMessage, setAttributeExpressionMessage] = useState("");
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: SortDirection } | null>(null);
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
+  const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [fieldOrder, setFieldOrder] = useState<string[]>([]);
   const orderedFields = [
     ...fieldOrder.filter((field) => props.fields.includes(field)),
@@ -93,6 +276,7 @@ export function DraftFeatureTable(props: {
       ];
       return values.some((value) => String(value).toLowerCase().includes(normalizedFilter));
     })
+    .filter(({ index }) => !showSelectedOnly || selectedIndexes.has(index))
     .sort((left, right) =>
       sortConfig
         ? compareTableValues(left.feature.get(sortConfig.field), right.feature.get(sortConfig.field), sortConfig.direction)
@@ -101,10 +285,14 @@ export function DraftFeatureTable(props: {
 
   function addField() {
     const field = newFieldName.trim();
-    if (!isEditing || !field) {
+    if (!field) {
       return;
     }
-    props.onAddField(field);
+    if (props.onAddFieldWithType) {
+      props.onAddFieldWithType(field, newFieldType);
+    } else {
+      props.onAddField(field);
+    }
     setFieldOrder((current) => (current.includes(field) ? current : [...current, field]));
     setNewFieldName("");
   }
@@ -115,10 +303,14 @@ export function DraftFeatureTable(props: {
     }
     props.onRemoveField(sortConfig.field);
     setFieldOrder((current) => current.filter((field) => field !== sortConfig.field));
+    if (selectedField === sortConfig.field) {
+      setSelectedField(null);
+    }
     setSortConfig(null);
   }
 
   function sortByField(field: string) {
+    setSelectedField(field);
     setSortConfig((current) => ({
       field,
       direction: current?.field === field ? nextSortDirection(current.direction) : "asc",
@@ -149,6 +341,23 @@ export function DraftFeatureTable(props: {
   function invertSelection() {
     const visibleIndexes = filteredRows.map((row) => row.index);
     setSelectedIndexes((current) => new Set(visibleIndexes.filter((index) => !current.has(index))));
+  }
+
+  function selectByExpression() {
+    const expression = parseAttributeExpression(attributeExpression);
+    if (!expression) {
+      setAttributeExpressionMessage("Не понял выражение. Пример: TYPE = bog");
+      return;
+    }
+    const matchingIndexes = props.features
+      .map((feature, index) => ({ feature, index }))
+      .filter(({ feature }) => matchesAttributeExpression(feature.getProperties(), expression))
+      .map(({ index }) => index);
+    setSelectedIndexes(new Set(matchingIndexes));
+    if (matchingIndexes[0] !== undefined) {
+      props.onFeatureSelect(matchingIndexes[0]);
+    }
+    setAttributeExpressionMessage(`Найдено: ${matchingIndexes.length}`);
   }
 
   function moveSortedField(direction: -1 | 1) {
@@ -211,6 +420,15 @@ export function DraftFeatureTable(props: {
           <button onClick={invertSelection} disabled={filteredRows.length === 0} title="Инвертировать выделение" data-tooltip="Инвертировать выделение">
             ◩
           </button>
+          <button
+            className={`selected-only-toggle${showSelectedOnly ? " active" : ""}`}
+            onClick={() => setShowSelectedOnly((value) => !value)}
+            disabled={!showSelectedOnly && selectedIndexes.size === 0}
+            title="Показать только выделенные"
+            data-tooltip="Показать только выделенные"
+          >
+            Выд.
+          </button>
           <button onClick={() => moveSortedField(-1)} disabled={!sortConfig} title="Поле левее" data-tooltip="Поле левее">
             ←
           </button>
@@ -230,6 +448,12 @@ export function DraftFeatureTable(props: {
           />
         </label>
       </div>
+      <AttributeExpressionBar
+        expression={attributeExpression}
+        message={attributeExpressionMessage}
+        onExpressionChange={setAttributeExpression}
+        onRun={selectByExpression}
+      />
       <div className="feature-table-field-add compact">
         <input
           value={newFieldName}
@@ -240,13 +464,17 @@ export function DraftFeatureTable(props: {
               addField();
             }
           }}
-          disabled={!isEditing}
           placeholder="Новое поле"
         />
-        <button onClick={addField} disabled={!isEditing || !newFieldName.trim()}>Добавить поле</button>
+        <select value={newFieldType} onChange={(event) => setNewFieldType(event.target.value as AttributeFieldType)}>
+          {ATTRIBUTE_FIELD_TYPES.map((type) => (
+            <option key={type.value} value={type.value}>{type.label}</option>
+          ))}
+        </select>
+        <button onClick={addField} disabled={!newFieldName.trim()}>Добавить поле</button>
       </div>
       {props.fields.length === 0 ? (
-        <p className="muted">Добавьте поля в свойствах чернового слоя, чтобы редактировать таблицу.</p>
+        <p className="muted">Добавьте первое поле через строку выше.</p>
       ) : (
         <div className="feature-table-wrap">
           <table className="feature-table editable-feature-table gis-feature-table">
@@ -255,11 +483,23 @@ export function DraftFeatureTable(props: {
                 <th className="row-index">#</th>
                 <th>Геометрия</th>
                 {orderedFields.map((field) => (
-                  <th key={field}>
-                    <button className="feature-table-sort" onClick={() => sortByField(field)}>
-                      {field}
-                      {sortConfig?.field === field ? (sortConfig.direction === "asc" ? " ↑" : " ↓") : ""}
-                    </button>
+                  <th key={field} className={selectedField === field ? "selected-column" : undefined}>
+                    <div className="feature-table-field-header">
+                      <button className="feature-table-sort" onClick={() => sortByField(field)}>
+                        {field}
+                        {sortConfig?.field === field ? (sortConfig.direction === "asc" ? " ↑" : " ↓") : ""}
+                      </button>
+                      <select
+                        value={props.fieldTypes[field] ?? "text"}
+                        onChange={(event) => props.onFieldTypeChange?.(field, event.target.value as AttributeFieldType)}
+                        onClick={(event) => event.stopPropagation()}
+                        disabled={!isEditing || !props.onFieldTypeChange}
+                      >
+                        {ATTRIBUTE_FIELD_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>{type.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -268,17 +508,21 @@ export function DraftFeatureTable(props: {
               {filteredRows.map(({ feature, index }) => (
                 <tr
                   key={`draft-${index}`}
-                  className={[props.selectedFeature === feature ? "selected" : "", selectedIndexes.has(index) ? "multi-selected" : ""].filter(Boolean).join(" ")}
+                  className={[
+                    props.selectedFeature === feature ? "selected" : "",
+                    selectedIndexes.has(index) ? "multi-selected" : "",
+                    isAiDraftFeature(feature) ? "ai-draft-row" : "",
+                  ].filter(Boolean).join(" ")}
                   onClick={() => toggleRowSelection(index)}
                 >
                   <td>{index + 1}</td>
-                  <td>{feature.getGeometry()?.getType() ?? "—"}</td>
+                  <td>{feature.getGeometry()?.getType() ?? "—"}{isAiDraftFeature(feature) ? " · AI" : ""}</td>
                   {orderedFields.map((field) => (
-                    <td key={field}>
-                      <input
-                        value={String(feature.get(field) ?? "")}
-                        onChange={(event) => props.onAttributeChange(index, field, event.target.value)}
-                        onClick={(event) => event.stopPropagation()}
+                    <td key={field} className={selectedField === field ? "selected-column-cell" : undefined}>
+                      <FieldValueEditor
+                        type={props.fieldTypes[field]}
+                        value={feature.get(field)}
+                        onChange={(value) => props.onAttributeChange(index, field, value)}
                         disabled={!isEditing}
                       />
                     </td>
@@ -317,8 +561,12 @@ export function FeatureTable(props: {
   const [isEditing, setIsEditing] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
   const [filterText, setFilterText] = useState("");
+  const [attributeExpression, setAttributeExpression] = useState("");
+  const [attributeExpressionMessage, setAttributeExpressionMessage] = useState("");
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: SortDirection } | null>(null);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [fieldOrder, setFieldOrder] = useState<string[]>([]);
   const fields = previewAttributeFields(props.layer.preview);
   const orderedFields = [
@@ -326,6 +574,11 @@ export function FeatureTable(props: {
     ...fields.filter((field) => !fieldOrder.includes(field)),
   ];
   const rows = props.layer.preview.geojson.features;
+  const selectedIndexesForLayer = new Set(
+    Array.from(props.selectedFeatureKeys)
+      .filter((key) => key.startsWith(`${props.layer.asset.id}:`))
+      .map((key) => Number(key.split(":")[1])),
+  );
   const normalizedFilter = filterText.trim().toLowerCase();
   const filteredRows = rows
     .map((feature, index) => ({ feature, index }))
@@ -340,6 +593,7 @@ export function FeatureTable(props: {
       ];
       return values.some((value) => String(value).toLowerCase().includes(normalizedFilter));
     })
+    .filter(({ index }) => !showSelectedOnly || selectedIndexesForLayer.has(index))
     .sort((left, right) =>
       sortConfig
         ? compareTableValues(
@@ -352,7 +606,7 @@ export function FeatureTable(props: {
 
   function addField() {
     const field = newFieldName.trim();
-    if (!isEditing || !field) {
+    if (!field) {
       return;
     }
     props.onAddField(props.layer.asset.id, field);
@@ -366,10 +620,14 @@ export function FeatureTable(props: {
     }
     props.onRemoveField(props.layer.asset.id, sortConfig.field);
     setFieldOrder((current) => current.filter((field) => field !== sortConfig.field));
+    if (selectedField === sortConfig.field) {
+      setSelectedField(null);
+    }
     setSortConfig(null);
   }
 
   function sortByField(field: string) {
+    setSelectedField(field);
     setSortConfig((current) => ({
       field,
       direction: current?.field === field ? nextSortDirection(current.direction) : "asc",
@@ -430,6 +688,26 @@ export function FeatureTable(props: {
           .map((index) => featureSelectionKey(props.layer.asset.id, index)),
       ),
     );
+  }
+
+  function selectByExpression() {
+    const expression = parseAttributeExpression(attributeExpression);
+    if (!expression) {
+      setAttributeExpressionMessage("Не понял выражение. Пример: TYPE = bog");
+      return;
+    }
+    const matchingIndexes = rows
+      .map((feature, index) => ({ feature, index }))
+      .filter(({ feature }) => matchesAttributeExpression(feature.properties ?? {}, expression))
+      .map(({ index }) => index);
+    props.onFeatureSelectionChange(
+      new Set(matchingIndexes.map((index) => featureSelectionKey(props.layer.asset.id, index))),
+    );
+    if (matchingIndexes[0] !== undefined) {
+      setLastSelectedIndex(matchingIndexes[0]);
+      props.onFeatureSelect({ assetId: props.layer.asset.id, featureIndex: matchingIndexes[0] });
+    }
+    setAttributeExpressionMessage(`Найдено: ${matchingIndexes.length}`);
   }
 
   function moveSortedField(direction: -1 | 1) {
@@ -499,6 +777,15 @@ export function FeatureTable(props: {
           >
             ⊙
           </button>
+          <button
+            className={`selected-only-toggle${showSelectedOnly ? " active" : ""}`}
+            onClick={() => setShowSelectedOnly((value) => !value)}
+            disabled={!showSelectedOnly && selectedIndexesForLayer.size === 0}
+            title="Показать только выделенные"
+            data-tooltip="Показать только выделенные"
+          >
+            Выд.
+          </button>
         </div>
         <label className="feature-table-search">
           Фильтр
@@ -509,6 +796,12 @@ export function FeatureTable(props: {
           />
         </label>
       </div>
+      <AttributeExpressionBar
+        expression={attributeExpression}
+        message={attributeExpressionMessage}
+        onExpressionChange={setAttributeExpression}
+        onRun={selectByExpression}
+      />
       {fields.length === 0 ? (
         <p className="muted">У слоя нет атрибутивных полей для таблицы.</p>
       ) : (
@@ -518,8 +811,13 @@ export function FeatureTable(props: {
               <tr>
                 <th className="row-index">#</th>
                 <th>Геометрия</th>
-                {fields.map((field) => (
-                  <th key={field}>{field}</th>
+                {orderedFields.map((field) => (
+                  <th key={field} className={selectedField === field ? "selected-column" : undefined}>
+                    <button className="feature-table-sort" onClick={() => sortByField(field)}>
+                      {field}
+                      {sortConfig?.field === field ? (sortConfig.direction === "asc" ? " ↑" : " ↓") : ""}
+                    </button>
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -538,8 +836,8 @@ export function FeatureTable(props: {
                 >
                   <td>{index + 1}</td>
                   <td>{feature.geometry?.type ?? "—"}</td>
-                  {fields.map((field) => (
-                    <td key={field}>
+                  {orderedFields.map((field) => (
+                    <td key={field} className={selectedField === field ? "selected-column-cell" : undefined}>
                       <input
                         value={String(feature.properties?.[field] ?? "")}
                         onChange={(event) =>
@@ -572,6 +870,8 @@ export function FeatureTable(props: {
 export function GisFeatureTable(props: {
   layer: LayerPreviewState;
   draftFeatures: Feature<Geometry>[];
+  draftSchemaFields: string[];
+  draftFieldTypes: Record<string, AttributeFieldType>;
   selectedDraftFeature: Feature<Geometry> | null;
   selectedFeature: SelectedLayerFeature;
   onFeatureSelect: (feature: SelectedLayerFeature) => void;
@@ -582,7 +882,9 @@ export function GisFeatureTable(props: {
   onAttributeChange: (assetId: number, featureIndex: number, field: string, value: string) => void;
   onDraftAttributeChange: (feature: Feature<Geometry>, field: string, value: string) => void;
   onAddField: (assetId: number, field: string) => void;
+  onAddDraftFieldWithType?: (field: string, type: AttributeFieldType) => void;
   onRemoveField: (assetId: number, field: string) => void;
+  onDraftFieldTypeChange?: (field: string, type: AttributeFieldType) => void;
   onClose: () => void;
   position: { x: number; y: number };
   zIndex: number;
@@ -591,10 +893,15 @@ export function GisFeatureTable(props: {
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState<AttributeFieldType>("text");
   const [filterText, setFilterText] = useState("");
+  const [attributeExpression, setAttributeExpression] = useState("");
+  const [attributeExpressionMessage, setAttributeExpressionMessage] = useState("");
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: SortDirection } | null>(null);
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [lastSelectedRowId, setLastSelectedRowId] = useState<string | null>(null);
+  const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [fieldOrder, setFieldOrder] = useState<string[]>([]);
   const draftFields = new Set<string>();
   props.draftFeatures.forEach((feature) => {
@@ -609,7 +916,13 @@ export function GisFeatureTable(props: {
       }
     });
   });
-  const fields = Array.from(new Set([...previewAttributeFields(props.layer.preview), ...draftFields]));
+  const draftFeatureHasNonBlankValue = (field: string) =>
+    props.draftFeatures.some((feature) => !isBlankAttributeValue(feature.get(field)));
+  const shouldShowDraftField = (field: string) =>
+    !isLegacyDraftDefaultField(field) || draftFeatureHasNonBlankValue(field);
+  const visibleDraftSchemaFields = props.draftSchemaFields.filter(shouldShowDraftField);
+  const visibleDraftFields = Array.from(draftFields).filter(shouldShowDraftField);
+  const fields = Array.from(new Set([...previewAttributeFields(props.layer.preview), ...visibleDraftSchemaFields, ...visibleDraftFields]));
   const emptyLayerFields = props.layer.preview.geojson.features[0]?.properties
     ? Object.keys(props.layer.preview.geojson.features[0].properties ?? {})
     : [];
@@ -635,6 +948,11 @@ export function GisFeatureTable(props: {
       rowId: `draft-${index}`,
     })),
   ];
+  const selectedSourceKeysForFilter = new Set(
+    Array.from(props.selectedFeatureKeys).filter((key) => key.startsWith(`${props.layer.asset.id}:`)),
+  );
+  const rowSelectionIndex = (row: (typeof rows)[number]) =>
+    row.kind === "source" ? row.index : props.layer.preview.geojson.features.length + row.index;
   const normalizedFilter = filterText.trim().toLowerCase();
   const filteredRows = rows
     .filter((row) => {
@@ -650,6 +968,13 @@ export function GisFeatureTable(props: {
       ];
       return values.some((value) => String(value).toLowerCase().includes(normalizedFilter));
     })
+    .filter(
+      (row) =>
+        !showSelectedOnly ||
+        selectedIndexes.has(rowSelectionIndex(row)) ||
+        (row.kind === "source" && selectedSourceKeysForFilter.has(featureSelectionKey(props.layer.asset.id, row.index))) ||
+        (row.kind === "draft" && props.selectedDraftFeature === row.feature),
+    )
     .sort((left, right) =>
       sortConfig
         ? compareTableValues(
@@ -662,8 +987,11 @@ export function GisFeatureTable(props: {
 
   function addField() {
     const field = newFieldName.trim();
-    if (!isEditing || !field) {
+    if (!field) {
       return;
+    }
+    if (props.onAddDraftFieldWithType) {
+      props.onAddDraftFieldWithType(field, newFieldType);
     }
     props.onAddField(props.layer.asset.id, field);
     setFieldOrder((current) => (current.includes(field) ? current : [...current, field]));
@@ -676,10 +1004,14 @@ export function GisFeatureTable(props: {
     }
     props.onRemoveField(props.layer.asset.id, sortConfig.field);
     setFieldOrder((current) => current.filter((field) => field !== sortConfig.field));
+    if (selectedField === sortConfig.field) {
+      setSelectedField(null);
+    }
     setSortConfig(null);
   }
 
   function sortByField(field: string) {
+    setSelectedField(field);
     setSortConfig((current) => ({
       field,
       direction: current?.field === field ? nextSortDirection(current.direction) : "asc",
@@ -777,10 +1109,41 @@ export function GisFeatureTable(props: {
       new Set(
         filteredRows
           .filter((row) => row.kind === "source")
-          .filter((row) => !selectedIndexes.has(row.index))
+          .filter((row) => !selectedIndexes.has(rowSelectionIndex(row)))
           .map((row) => featureSelectionKey(props.layer.asset.id, row.index)),
       ),
     );
+  }
+
+  function selectByExpression() {
+    const expression = parseAttributeExpression(attributeExpression);
+    if (!expression) {
+      setAttributeExpressionMessage("Не понял выражение. Пример: TYPE = bog");
+      return;
+    }
+    const matchingRows = rows.filter((row) =>
+      matchesAttributeExpression(
+        row.kind === "source" ? row.feature.properties ?? {} : row.feature.getProperties(),
+        expression,
+      ),
+    );
+    setSelectedIndexes(new Set(matchingRows.map(rowSelectionIndex)));
+    props.onFeatureSelectionChange(
+      new Set(
+        matchingRows
+          .filter((row) => row.kind === "source")
+          .map((row) => featureSelectionKey(props.layer.asset.id, row.index)),
+      ),
+    );
+    const firstRow = matchingRows[0];
+    if (firstRow?.kind === "source") {
+      props.onFeatureSelect({ assetId: props.layer.asset.id, featureIndex: firstRow.index });
+      setLastSelectedRowId(firstRow.rowId);
+    } else if (firstRow?.kind === "draft") {
+      props.onDraftFeatureSelect(firstRow.feature);
+      setLastSelectedRowId(firstRow.rowId);
+    }
+    setAttributeExpressionMessage(`Найдено: ${matchingRows.length}`);
   }
 
   function zoomToTableSelection() {
@@ -850,6 +1213,15 @@ export function GisFeatureTable(props: {
           <button onClick={selectAllRows} disabled={filteredRows.length === 0} title="Выделить все" data-tooltip="Выделить все">▣</button>
           <button onClick={clearSelection} disabled={selectedIndexes.size === 0} title="Снять выделение" data-tooltip="Снять выделение">□</button>
           <button onClick={invertSelection} disabled={filteredRows.length === 0} title="Инвертировать выделение" data-tooltip="Инвертировать выделение">◩</button>
+          <button
+            className={`selected-only-toggle${showSelectedOnly ? " active" : ""}`}
+            onClick={() => setShowSelectedOnly((value) => !value)}
+            disabled={!showSelectedOnly && selectedIndexes.size === 0 && selectedSourceKeysForFilter.size === 0 && !props.selectedDraftFeature}
+            title="Показать только выделенные"
+            data-tooltip="Показать только выделенные"
+          >
+            Выд.
+          </button>
           <button className="zoom-selected-button" onClick={zoomToTableSelection} disabled={!hasZoomSelection} title="Увеличить до выделенного" data-tooltip="Увеличить до выделенного">
             <ZoomToSelectionIcon />
           </button>
@@ -862,6 +1234,12 @@ export function GisFeatureTable(props: {
           <input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Поиск" />
         </label>
       </div>
+      <AttributeExpressionBar
+        expression={attributeExpression}
+        message={attributeExpressionMessage}
+        onExpressionChange={setAttributeExpression}
+        onRun={selectByExpression}
+      />
       <div className="feature-table-field-add compact">
         <input
           value={newFieldName}
@@ -872,13 +1250,17 @@ export function GisFeatureTable(props: {
               addField();
             }
           }}
-          disabled={!isEditing}
           placeholder="Новое поле"
         />
-        <button onClick={addField} disabled={!isEditing || !newFieldName.trim()}>Добавить поле</button>
+        <select value={newFieldType} onChange={(event) => setNewFieldType(event.target.value as AttributeFieldType)}>
+          {ATTRIBUTE_FIELD_TYPES.map((type) => (
+            <option key={type.value} value={type.value}>{type.label}</option>
+          ))}
+        </select>
+        <button onClick={addField} disabled={!newFieldName.trim()}>Добавить поле</button>
       </div>
       {orderedFields.length === 0 ? (
-        <p className="muted">У слоя нет атрибутивных полей. Включите редактирование и добавьте поле.</p>
+        <p className="muted">У слоя нет атрибутивных полей. Добавьте первое поле через строку выше.</p>
       ) : (
         <div className="feature-table-wrap">
           <table className="feature-table editable-feature-table gis-feature-table">
@@ -887,11 +1269,23 @@ export function GisFeatureTable(props: {
                 <th className="row-index">#</th>
                 <th>Геометрия</th>
                 {orderedFields.map((field) => (
-                  <th key={field}>
-                    <button className="feature-table-sort" onClick={() => sortByField(field)}>
-                      {field}
-                      {sortConfig?.field === field ? (sortConfig.direction === "asc" ? " ↑" : " ↓") : ""}
-                    </button>
+                  <th key={field} className={selectedField === field ? "selected-column" : undefined}>
+                    <div className="feature-table-field-header">
+                      <button className="feature-table-sort" onClick={() => sortByField(field)}>
+                        {field}
+                        {sortConfig?.field === field ? (sortConfig.direction === "asc" ? " ↑" : " ↓") : ""}
+                      </button>
+                      <select
+                        value={props.draftFieldTypes[field] ?? "text"}
+                        onChange={(event) => props.onDraftFieldTypeChange?.(field, event.target.value as AttributeFieldType)}
+                        onClick={(event) => event.stopPropagation()}
+                        disabled={!isEditing || !props.onDraftFieldTypeChange}
+                      >
+                        {ATTRIBUTE_FIELD_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>{type.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -915,23 +1309,27 @@ export function GisFeatureTable(props: {
                     isSelected ? "selected" : "",
                     selectedIndexes.has(selectionIndex) ? "multi-selected" : "",
                     row.kind === "draft" ? "draft-row" : "",
+                    row.kind === "draft" && isAiDraftFeature(row.feature) ? "ai-draft-row" : "",
                   ].filter(Boolean).join(" ")}
                   onClick={(event) => toggleRowSelection(row, event)}
                 >
                   <td>{selectionIndex + 1}</td>
-                  <td>{geometryType}{row.kind === "draft" ? " · черновик" : ""}</td>
+                  <td>
+                    {geometryType}
+                    {row.kind === "draft" ? ` · ${isAiDraftFeature(row.feature) ? "AI-черновик" : "черновик"}` : ""}
+                  </td>
                   {orderedFields.map((field) => (
-                    <td key={field}>
-                      <input
-                        value={String(row.kind === "source" ? row.feature.properties?.[field] ?? "" : row.feature.get(field) ?? "")}
-                        onChange={(event) => {
+                    <td key={field} className={selectedField === field ? "selected-column-cell" : undefined}>
+                      <FieldValueEditor
+                        type={props.draftFieldTypes[field]}
+                        value={row.kind === "source" ? row.feature.properties?.[field] ?? "" : row.feature.get(field)}
+                        onChange={(value) => {
                           if (row.kind === "source") {
-                            props.onAttributeChange(props.layer.asset.id, row.index, field, event.target.value);
+                            props.onAttributeChange(props.layer.asset.id, row.index, field, value);
                           } else {
-                            props.onDraftAttributeChange(row.feature, field, event.target.value);
+                            props.onDraftAttributeChange(row.feature, field, value);
                           }
                         }}
-                        onClick={(event) => event.stopPropagation()}
                         disabled={!isEditing}
                       />
                     </td>
@@ -952,4 +1350,3 @@ export function GisFeatureTable(props: {
     </section>
   );
 }
-

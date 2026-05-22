@@ -27,6 +27,8 @@ class SegmentBoxRequest(BaseModel):
         description="Map extent of the image as [minx, miny, maxx, maxy].",
     )
     prompt_geometry: dict[str, Any] | None = None
+    target_layer_name: str | None = None
+    target_semantic_type: Literal["water", "forest"] | None = None
     target_geometry_type: Literal["polygon", "line", "point"] = "polygon"
 
 

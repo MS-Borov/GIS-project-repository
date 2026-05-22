@@ -3,27 +3,28 @@ import re
 
 def analyze_report_text(report_context: dict | None) -> dict:
     """
-    Простая rule-based оценка отчёта.
+    Lightweight rule-based report analysis.
 
-    Это не заменяет LLM, а даёт:
-    - полезные признаки,
-    - базовые предупреждения,
-    - понятную структуру для prompt-а.
+    The result gives the LLM signals, not a final grade. In screenshot-heavy
+    reports, missing headings are treated as notes instead of hard warnings.
     """
     if not report_context:
         return {
             "status": "warning",
-            "message": "Отчёт отсутствует.",
+            "message": "Report asset is missing.",
             "details": {},
         }
+
+    image_count = report_context.get("image_count") or len(report_context.get("images") or [])
 
     if not report_context.get("can_analyze"):
         return {
             "status": "warning",
-            "message": report_context.get("message", "Отчёт найден, но текст не извлечён."),
+            "message": report_context.get("message", "Report was found, but text could not be extracted."),
             "details": {
                 "format": report_context.get("format"),
                 "can_analyze": False,
+                "image_count": image_count,
             },
         }
 
@@ -54,26 +55,28 @@ def analyze_report_text(report_context: dict | None) -> dict:
     }
 
     warnings = []
+    notes = []
+
     if word_count < 40:
-        warnings.append("Текст отчёта слишком короткий для уверенного анализа.")
-    if not sections_found["conclusion"]:
-        warnings.append("В отчёте не обнаружен явный раздел с выводами.")
-    if not sections_found["methodology"]:
-        warnings.append(
-            "В отчёте не найден явный структурный раздел с ходом работы; отдельные действия могут быть описаны в тексте."
-        )
+        if image_count:
+            notes.append(
+                "Report text is short, but the document contains screenshots; visual evidence should be checked."
+            )
+        else:
+            warnings.append("Report text is too short for confident analysis.")
 
     return {
         "status": "warning" if warnings else "passed",
-        "message": "Отчёт проанализирован." if not warnings else "Отчёт проанализирован с предупреждениями.",
+        "message": "Report was analyzed." if not warnings else "Report was analyzed with warnings.",
         "details": {
             "format": report_context.get("format"),
             "can_analyze": True,
             "word_count": word_count,
+            "image_count": image_count,
             "sections_found": sections_found,
             "mentions": mentions,
             "warnings": warnings,
-            # Для LLM не надо отправлять бесконечный текст.
+            "notes": notes,
             "text_preview": text[:4000],
         },
     }

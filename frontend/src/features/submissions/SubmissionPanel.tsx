@@ -75,6 +75,13 @@ function layerDisplayName(assetName: string) {
   return assetName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
 }
 
+function formatDetectedFormat(format: string) {
+  if (format === "geojson") return "Слой карты";
+  if (format === "shapefile_zip") return "Архив слоёв";
+  if (format === "qgis_project") return "QGIS-проект";
+  return format.replace(/_/g, " ");
+}
+
 function mapViewerUrl(submissionId: number) {
   const url = new URL(window.location.href);
   url.search = "";
@@ -198,7 +205,7 @@ export function SubmissionPanel(props: {
               <div key={asset.id}>
                 <strong>{layerDisplayName(asset.asset_name)}</strong>
                 <span>
-                  {asset.asset_type} · {asset.detected_format} · {statusLabel(asset.status)}
+                  {asset.asset_type} · {formatDetectedFormat(asset.detected_format)} · {statusLabel(asset.status)}
                 </span>
                 {isPreviewableAsset(asset) ? (
                   <button onClick={() => props.onLoadAssetPreview(asset.id)} disabled={props.isLoading}>

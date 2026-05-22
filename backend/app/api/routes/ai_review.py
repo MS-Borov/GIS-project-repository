@@ -12,6 +12,7 @@ from app.models.user import User
 from app.services.ai_review_service import generate_ai_review
 from app.services.document_text_extractor import extract_document_text
 from app.services.rate_limit import build_rate_limit_key, enforce_rate_limit, get_client_ip
+from app.services.report_assignment_matcher import evaluate_report_assignment_match
 from app.services.report_analysis_service import analyze_report_text
 from app.services.storage import get_s3_client
 
@@ -43,8 +44,14 @@ def _normalized_name(value: str | None) -> str:
 def _report_asset_score(asset: SubmissionAsset) -> int:
     name = _normalized_name(asset.asset_name)
     detected_format = (asset.detected_format or "").strip().lower()
+    group_key = (asset.group_key or "").strip().lower()
 
     score = REPORT_FORMAT_SCORE.get(detected_format, 0)
+
+    if group_key == "uploaded_report":
+        score += 200
+    elif group_key == "archive_report":
+        score -= 40
 
     if any(hint.replace("ё", "е") in name for hint in REPORT_NAME_HINTS):
         score += 100
@@ -115,6 +122,7 @@ def create_ai_review(
 
     report_document = None
     report_analysis = None
+    report_assignment_match = None
 
     if report_asset and report_asset.storage_key:
         report_bytes = _load_asset_bytes(report_asset.storage_key)
@@ -203,17 +211,34 @@ def create_ai_review(
             "needs_reference_layer": requirements.needs_reference_layer,
             "report_required": requirements.report_required,
             "auto_checkable": requirements.auto_checkable,
+            "source_doc_name": requirements.source_doc_name,
+            "source_text_preview": (requirements.source_text or "")[:6000] if requirements.source_text else None,
+            "extraction_notes": requirements.extraction_notes,
         }
+
+    if report_asset and report_document:
+        report_assignment_match = evaluate_report_assignment_match(
+            assignment_title=assignment.title if assignment else f"Assignment #{submission.assignment_id}",
+            requirements_dict=requirements_dict,
+            report_context={
+                "asset_name": report_asset.asset_name,
+                **report_document,
+            },
+            layer_asset_names=[asset.asset_name for asset in assets if asset.asset_type == "layer"],
+        )
+
+    report_context = {
+        "asset_name": report_asset.asset_name if report_asset else None,
+        "asset_id": report_asset.id if report_asset else None,
+        "document": report_document,
+        "analysis": report_analysis,
+        "assignment_match": report_assignment_match,
+    } if report_document or report_analysis or report_assignment_match else None
 
     result = generate_ai_review(
         assignment_title=assignment.title if assignment else f"Assignment #{submission.assignment_id}",
         requirements_dict=requirements_dict,
-        report_context={
-            "asset_name": report_asset.asset_name if report_asset else None,
-            "asset_id": report_asset.id if report_asset else None,
-            "document": report_document,
-            "analysis": report_analysis,
-        } if report_document or report_analysis else None,
+        report_context=report_context,
         gis_technical_result={
             "mode": "technical_checks_collection",
             "checks": [check.result_json for check in technical_checks if check.result_json],
@@ -230,6 +255,9 @@ def create_ai_review(
         warnings.append("В submission не найден report asset.")
     elif report_document and not report_document.get("can_analyze"):
         warnings.append(report_document.get("message", "Отчёт найден, но текст извлечь не удалось."))
+
+    if report_assignment_match and report_assignment_match.get("status") == "failed":
+        warnings.append(report_assignment_match.get("message", "Отчёт может относиться к другой лабораторной работе."))
 
     if not formal_requirements_check and not transient_requirements_summary:
         warnings.append("Не найден requirements_summary check для submission.")
@@ -257,5 +285,6 @@ def create_ai_review(
         "technical_check_ids": [check.id for check in technical_checks],
         "warnings": warnings,
         "report_analysis": report_analysis,
+        "report_assignment_match": report_assignment_match,
         "ai_review": result,
     }

@@ -19,13 +19,18 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://redis:6379/0"
 
-    # cerebras_relay | ollama
+    # cerebras_relay | openrouter | ollama
     llm_backend: str = "cerebras_relay"
     openai_api_key: str | None = None
 
     # Cerebras relay
     cerebras_model: str = "llama3.1-8b"
     cerebras_relay_url: str = "http://host.docker.internal:8788/chat"
+
+    # OpenRouter. Use a :free model for zero-cost multimodal testing.
+    openrouter_api_key: str | None = None
+    openrouter_model: str = "google/gemma-4-31b-it:free"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     # Локальный fallback можно оставить
     llm_base_url: str = "http://host.docker.internal:11434"

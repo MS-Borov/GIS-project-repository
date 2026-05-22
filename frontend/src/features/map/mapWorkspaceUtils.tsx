@@ -133,7 +133,7 @@ export type LayerLayoutSnapshot = {
   layerStyles: Record<number, LayerStyleSettings>;
 };
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "/api";
 export const AUTH_STORAGE_KEY = "gis_edu_auth";
 export const THEME_STORAGE_KEY = "gis_edu_theme";
 export const ARCHIVE_PREVIEW_STORAGE_PREFIX = "gis_edu_archive_preview:";
@@ -339,7 +339,7 @@ export function normalizeGeoJsonFeatureCollection(value: unknown): GeoJsonPrevie
       features: [value as GeoJsonFeature],
     };
   }
-  throw new Error("Файл не похож на GeoJSON FeatureCollection или Feature.");
+  throw new Error("Файл не похож на поддерживаемую коллекцию объектов.");
 }
 
 export function toggleStoredTheme(currentTheme: ThemeMode, onChange: (theme: ThemeMode) => void) {

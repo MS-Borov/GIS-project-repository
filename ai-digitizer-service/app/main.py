@@ -32,6 +32,28 @@ PROMPT_ML_POSITIVE_THRESHOLD_SCALE = float(os.getenv("PROMPT_ML_POSITIVE_THRESHO
 PROMPT_ML_NEGATIVE_MARGIN = float(os.getenv("PROMPT_ML_NEGATIVE_MARGIN", "0.72"))
 PROMPT_ML_MAX_AREA_RATIO = float(os.getenv("PROMPT_ML_MAX_AREA_RATIO", "0.82"))
 PROMPT_ML_SIMPLIFY_RATIO = float(os.getenv("PROMPT_ML_SIMPLIFY_RATIO", "0.0045"))
+OSM_WATER_HEURISTIC_ENABLED = os.getenv("OSM_WATER_HEURISTIC_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+OSM_FILL_HEURISTIC_ENABLED = os.getenv("OSM_FILL_HEURISTIC_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+OSM_FOREST_HEURISTIC_ENABLED = os.getenv("OSM_FOREST_HEURISTIC_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+OSM_WATER_MIN_PIXEL_RATIO = float(os.getenv("OSM_WATER_MIN_PIXEL_RATIO", "0.0008"))
+OSM_WATER_MAX_AREA_RATIO = float(os.getenv("OSM_WATER_MAX_AREA_RATIO", "0.38"))
+OSM_WATER_LARGE_PROMPT_RATIO = float(os.getenv("OSM_WATER_LARGE_PROMPT_RATIO", "0.22"))
+OSM_WATER_LARGE_MAX_AREA_RATIO = float(os.getenv("OSM_WATER_LARGE_MAX_AREA_RATIO", "0.86"))
+OSM_WATER_SIMPLIFY_RATIO = float(os.getenv("OSM_WATER_SIMPLIFY_RATIO", "0.0035"))
+OSM_WATER_LARGE_SIMPLIFY_RATIO = float(os.getenv("OSM_WATER_LARGE_SIMPLIFY_RATIO", "0.0008"))
+OSM_FOREST_MIN_PIXEL_RATIO = float(os.getenv("OSM_FOREST_MIN_PIXEL_RATIO", "0.0012"))
+OSM_FOREST_MAX_AREA_RATIO = float(os.getenv("OSM_FOREST_MAX_AREA_RATIO", "0.62"))
+OSM_FOREST_LARGE_PROMPT_RATIO = float(os.getenv("OSM_FOREST_LARGE_PROMPT_RATIO", "0.24"))
+OSM_FOREST_LARGE_MAX_AREA_RATIO = float(os.getenv("OSM_FOREST_LARGE_MAX_AREA_RATIO", "0.9"))
+OSM_FOREST_SIMPLIFY_RATIO = float(os.getenv("OSM_FOREST_SIMPLIFY_RATIO", "0.0025"))
+OSM_FOREST_LARGE_SIMPLIFY_RATIO = float(os.getenv("OSM_FOREST_LARGE_SIMPLIFY_RATIO", "0.001"))
+OSM_LOCAL_RF_ENABLED = os.getenv("OSM_LOCAL_RF_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+OSM_LOCAL_RF_MAX_SAMPLES = int(os.getenv("OSM_LOCAL_RF_MAX_SAMPLES", "9000"))
+OSM_LOCAL_RF_MIN_POSITIVE = int(os.getenv("OSM_LOCAL_RF_MIN_POSITIVE", "32"))
+OSM_LOCAL_RF_MIN_COVERAGE = float(os.getenv("OSM_LOCAL_RF_MIN_COVERAGE", "0.12"))
+OSM_FILL_MIN_PIXEL_RATIO = float(os.getenv("OSM_FILL_MIN_PIXEL_RATIO", "0.0012"))
+OSM_FILL_MAX_AREA_RATIO = float(os.getenv("OSM_FILL_MAX_AREA_RATIO", "0.62"))
+OSM_FILL_SIMPLIFY_RATIO = float(os.getenv("OSM_FILL_SIMPLIFY_RATIO", "0.004"))
 SAM2_MAX_COARSE_AREA_RATIO = float(os.getenv("SAM2_MAX_COARSE_AREA_RATIO", "1.25"))
 SAM2_MIN_COARSE_IOU = float(os.getenv("SAM2_MIN_COARSE_IOU", "0.55"))
 SAM2_MIN_COARSE_COVERAGE = float(os.getenv("SAM2_MIN_COARSE_COVERAGE", "0.72"))
@@ -61,6 +83,8 @@ class SegmentBoxRequest(BaseModel):
         description="Map extent of the image as [minx, miny, maxx, maxy].",
     )
     prompt_geometry: dict | None = None
+    target_layer_name: str | None = None
+    target_semantic_type: Literal["water", "forest"] | None = None
     target_geometry_type: Literal["polygon", "line", "point"] = "polygon"
 
 
@@ -70,6 +94,66 @@ class SegmentBoxResponse(BaseModel):
     confidence: float
     message: str
     meta: dict
+
+
+def _layer_name_variants(layer_name: str | None) -> list[str]:
+    if not layer_name:
+        return []
+    normalized = layer_name.strip().lower()
+    variants = {normalized}
+    for encoding in ("cp1251", "latin1"):
+        try:
+            variants.add(normalized.encode(encoding).decode("utf-8").lower())
+        except (UnicodeError, LookupError):
+            pass
+    return [variant for variant in variants if variant]
+
+
+def _is_water_target_layer(layer_name: str | None) -> bool:
+    variants = _layer_name_variants(layer_name)
+    if not variants:
+        return False
+    water_tokens = (
+        "hydro",
+        "water",
+        "river",
+        "lake",
+        "pond",
+        "reservoir",
+        "гидр",
+        "вод",
+        "река",
+        "рек",
+        "озер",
+        "озёр",
+        "пруд",
+    )
+    return any(token in variant for variant in variants for token in water_tokens)
+
+
+def _is_forest_target_layer(layer_name: str | None) -> bool:
+    variants = _layer_name_variants(layer_name)
+    if not variants:
+        return False
+    forest_tokens = (
+        "forest",
+        "wood",
+        "woods",
+        "tree",
+        "trees",
+        "vegetation",
+        "landuse_forest",
+        "natural_wood",
+        "les",
+        "\u043b\u0435\u0441",
+        "\u043b\u0435\u0441\u0430",
+        "\u043b\u0435\u0441\u043d",
+        "\u0434\u0440\u0435\u0432",
+        "\u0440\u0430\u0441\u0442\u0438\u0442",
+        "р»рµс",
+        "р›рµс",
+    )
+    return any(token in variant for variant in variants for token in forest_tokens)
 
 
 @app.get("/health")
@@ -84,6 +168,7 @@ def health() -> dict[str, Any]:
         "water_unet_loaded": _water_unet_model is not None,
         "water_unet_error": _water_unet_error,
         "prompt_ml_configured": AI_DIGITIZER_BACKEND in (PROMPT_ML_BACKENDS | PROMPT_ML_SAM2_BACKENDS),
+        "osm_forest_heuristic_enabled": OSM_FOREST_HEURISTIC_ENABLED,
     }
 
 
@@ -476,8 +561,8 @@ def _evaluate_prompt_quality(
     area_ratio = result_area / prompt_area
 
     reasons = []
-    min_iou = 0.08 if rough_prompt else AI_MIN_RESULT_PROMPT_IOU
-    min_prompt_coverage = 0.12 if rough_prompt else AI_MIN_PROMPT_COVERAGE
+    min_iou = 0.03 if rough_prompt else AI_MIN_RESULT_PROMPT_IOU
+    min_prompt_coverage = 0.03 if rough_prompt else AI_MIN_PROMPT_COVERAGE
     max_area_ratio = min(1.35, AI_MAX_RESULT_PROMPT_AREA_RATIO) if rough_prompt else AI_MAX_RESULT_PROMPT_AREA_RATIO
     if iou < min_iou:
         reasons.append("low_iou")
@@ -665,15 +750,17 @@ def _mask_to_polygon(
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
     strict_prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image_size, image_extent, dilation_px=0)
-    allowed_mask = _constraint_mask_from_prompt(strict_prompt_mask, binary.shape)
-    if allowed_mask is not None:
-        constrained = cv2.bitwise_and(binary, allowed_mask)
+    if strict_prompt_mask is not None and int(np.count_nonzero(strict_prompt_mask > 0)) > 0:
+        constrained = cv2.bitwise_and(binary, strict_prompt_mask)
         prompt_area = float(np.count_nonzero(strict_prompt_mask > 0)) if strict_prompt_mask is not None else 0.0
         constrained_area = float(np.count_nonzero(constrained > 0))
-        if constrained_area >= max(16.0, prompt_area * 0.25):
+        if constrained_area >= max(8.0, prompt_area * 0.02):
             binary = constrained
 
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if simplify_ratio is None:
+        simplify_ratio = 0.008
+    contour_approximation = cv2.CHAIN_APPROX_NONE if simplify_ratio <= 0.001 else cv2.CHAIN_APPROX_SIMPLE
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, contour_approximation)
     if not contours:
         return None
 
@@ -684,9 +771,8 @@ def _mask_to_polygon(
     if area < max(16.0, crop_area * 0.005):
         return None
 
-    if simplify_ratio is None:
-        simplify_ratio = 0.008
-    epsilon = max(0.8, simplify_ratio * cv2.arcLength(contour, True))
+    min_epsilon = 0.35 if simplify_ratio <= 0.001 else 0.8
+    epsilon = max(min_epsilon, simplify_ratio * cv2.arcLength(contour, True))
     simplified = cv2.approxPolyDP(contour, epsilon, True)
     points = [(float(point[0][0] + left), float(point[0][1] + top)) for point in simplified]
     if len(points) < 3:
@@ -710,6 +796,27 @@ def _sam2_mask_input_from_binary_mask(mask: np.ndarray) -> np.ndarray | None:
     low_res = cv2.resize((mask > 0).astype("float32"), (size, size), interpolation=cv2.INTER_AREA)
     logits = np.where(low_res > 0.5, 8.0, -8.0).astype("float32")
     return logits[None, :, :]
+
+
+def _constrain_refined_mask(refined_mask: np.ndarray, constraint_mask: np.ndarray | None, dilation_px: int = 8) -> np.ndarray:
+    if constraint_mask is None or constraint_mask.size == 0:
+        return refined_mask
+
+    refined = np.where(refined_mask > 0, 255, 0).astype("uint8")
+    constraint = np.where(constraint_mask > 0, 255, 0).astype("uint8")
+    if constraint.shape != refined.shape:
+        constraint = cv2.resize(constraint, (refined.shape[1], refined.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+    if dilation_px > 0:
+        kernel_size = max(3, dilation_px | 1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        constraint = cv2.dilate(constraint, kernel, iterations=1)
+
+    constrained = cv2.bitwise_and(refined, constraint)
+    if int(np.count_nonzero(constrained > 0)) < 24:
+        return refined_mask
+
+    return constrained
 
 
 def _predict_water_crop_mask(
@@ -764,6 +871,904 @@ def _full_mask_from_crop_mask(
     full_mask = np.zeros((image.height, image.width), dtype="uint8")
     full_mask[top:bottom, left:right] = crop_mask
     return full_mask
+
+
+def _seed_connected_candidate_mask(seed_mask: np.ndarray, candidate_mask: np.ndarray, max_iterations: int) -> np.ndarray:
+    if int(np.count_nonzero(seed_mask > 0)) == 0:
+        return candidate_mask
+
+    seed = np.where(seed_mask > 0, 255, 0).astype("uint8")
+    candidate = np.where(candidate_mask > 0, 255, 0).astype("uint8")
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    previous_count = -1
+    for _ in range(max(1, max_iterations)):
+        current_count = int(np.count_nonzero(seed > 0))
+        if current_count == previous_count:
+            break
+        previous_count = current_count
+        seed = cv2.bitwise_and(cv2.dilate(seed, kernel, iterations=1), candidate)
+    return seed
+
+
+def _sample_flat_indices(mask: np.ndarray, max_samples: int) -> np.ndarray:
+    indices = np.flatnonzero(mask.reshape(-1))
+    if len(indices) <= max_samples:
+        return indices
+    selected = np.linspace(0, len(indices) - 1, max_samples).astype(np.int64)
+    return indices[selected]
+
+
+def _osm_ml_features(crop: np.ndarray) -> np.ndarray:
+    height, width = crop.shape[:2]
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    lab = cv2.cvtColor(crop, cv2.COLOR_RGB2LAB)
+    gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
+    grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    grad_y = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    grad = np.sqrt(grad_x * grad_x + grad_y * grad_y)
+    grad = np.clip(grad / 255.0, 0.0, 1.0)
+    yy, xx = np.mgrid[0:height, 0:width]
+    features = np.dstack(
+        [
+            crop.astype("float32") / 255.0,
+            hsv.astype("float32") / np.array([179.0, 255.0, 255.0], dtype=np.float32),
+            lab.astype("float32") / 255.0,
+            grad.astype("float32"),
+            (xx.astype("float32") / max(1.0, float(width - 1))),
+            (yy.astype("float32") / max(1.0, float(height - 1))),
+        ]
+    )
+    return features.reshape(-1, features.shape[2]).astype("float32")
+
+
+def _predict_with_local_random_forest(
+    crop: np.ndarray,
+    positive_mask: np.ndarray,
+    negative_mask: np.ndarray,
+    predict_mask: np.ndarray,
+) -> tuple[np.ndarray, dict[str, Any]] | None:
+    if not hasattr(cv2, "ml") or not hasattr(cv2.ml, "RTrees_create"):
+        return None
+
+    positive_indices = _sample_flat_indices(positive_mask, OSM_LOCAL_RF_MAX_SAMPLES // 2)
+    negative_indices = _sample_flat_indices(negative_mask, OSM_LOCAL_RF_MAX_SAMPLES // 2)
+    if len(positive_indices) < OSM_LOCAL_RF_MIN_POSITIVE or len(negative_indices) < max(32, OSM_LOCAL_RF_MIN_POSITIVE):
+        return None
+
+    features = _osm_ml_features(crop)
+    samples = np.vstack([features[positive_indices], features[negative_indices]]).astype("float32")
+    labels = np.concatenate(
+        [
+            np.ones(len(positive_indices), dtype=np.int32),
+            np.zeros(len(negative_indices), dtype=np.int32),
+        ]
+    )
+
+    try:
+        model = cv2.ml.RTrees_create()
+        model.setMaxDepth(12)
+        model.setMinSampleCount(4)
+        model.setRegressionAccuracy(0.0)
+        model.setUseSurrogates(False)
+        model.setMaxCategories(2)
+        model.setCalculateVarImportance(False)
+        model.setTermCriteria((cv2.TERM_CRITERIA_MAX_ITER, 60, 0.0))
+        if not model.train(samples, cv2.ml.ROW_SAMPLE, labels):
+            return None
+    except cv2.error:
+        return None
+
+    predict_indices = np.flatnonzero(predict_mask.reshape(-1))
+    if len(predict_indices) == 0:
+        return None
+
+    predicted_flat = np.zeros(crop.shape[:2][0] * crop.shape[:2][1], dtype=bool)
+    try:
+        chunk_size = 60000
+        for start in range(0, len(predict_indices), chunk_size):
+            chunk = predict_indices[start : start + chunk_size]
+            _, response = model.predict(features[chunk])
+            predicted_flat[chunk] = response.reshape(-1) >= 0.5
+    except cv2.error:
+        return None
+
+    predicted = predicted_flat.reshape(crop.shape[:2])
+    predicted &= predict_mask
+    return np.where(predicted, 255, 0).astype("uint8"), {
+        "model": "opencv-rtrees",
+        "positive_samples": int(len(positive_indices)),
+        "negative_samples": int(len(negative_indices)),
+        "predict_pixels": int(len(predict_indices)),
+    }
+
+
+def _predict_osm_water_crop_mask(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+) -> tuple[np.ndarray, dict[str, Any]] | None:
+    left, top, right, bottom = bbox
+    crop = np.array(image.crop((left, top, right, bottom)).convert("RGB"))
+    if crop.size == 0:
+        return None
+
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    r = crop[:, :, 0].astype(np.int16)
+    g = crop[:, :, 1].astype(np.int16)
+    b = crop[:, :, 2].astype(np.int16)
+    h = hsv[:, :, 0].astype(np.int16)
+    s = hsv[:, :, 1].astype(np.int16)
+    v = hsv[:, :, 2].astype(np.int16)
+
+    yellow_beige_fill = (
+        (h <= 46)
+        & (s >= 16)
+        & (v >= 135)
+        & (r >= b + 28)
+        & (g >= b + 14)
+        & (r >= g - 18)
+    )
+
+    # OSM water is usually pale cyan/blue, but on some rendered zooms it becomes a muted green-gray fill.
+    pale_osm_water = (
+        (h >= 74)
+        & (h <= 112)
+        & (s >= 18)
+        & (s <= 125)
+        & (v >= 125)
+        & (b >= r + 8)
+        & (g >= r + 2)
+        & (b >= g - 18)
+        & ~yellow_beige_fill
+    )
+    muted_osm_water = (
+        (h >= 38)
+        & (h <= 86)
+        & (s >= 8)
+        & (s <= 86)
+        & (v >= 110)
+        & (v <= 238)
+        & (g >= r - 12)
+        & (b >= r - 48)
+        & ~yellow_beige_fill
+    )
+    strong_blue_water = (
+        (h >= 84)
+        & (h <= 125)
+        & (s >= 55)
+        & (v >= 75)
+        & (b >= r + 18)
+        & (b >= g - 28)
+    )
+
+    prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image.size, image_extent, dilation_px=0)
+    prompt_pixels = int(np.count_nonzero(prompt_mask > 0)) if prompt_mask is not None else 0
+    prompt_ratio = prompt_pixels / max(1.0, float(crop.shape[0] * crop.shape[1]))
+    large_prompt = prompt_ratio >= OSM_WATER_LARGE_PROMPT_RATIO or prompt_pixels >= 65_000
+
+    strict_mask = np.where(pale_osm_water | strong_blue_water, 255, 0).astype("uint8")
+    large_muted_osm_water = (
+        muted_osm_water
+        & (b >= g - 32)
+        & (b >= r - 18)
+        & (r >= 145)
+        & (g >= 145)
+    )
+    candidate_mask = np.where(
+        pale_osm_water | strong_blue_water | (large_muted_osm_water if large_prompt else muted_osm_water),
+        255,
+        0,
+    ).astype("uint8")
+
+    if large_prompt and int(np.count_nonzero(strict_mask > 0)) >= max(12, int(candidate_mask.size * OSM_WATER_MIN_PIXEL_RATIO * 0.35)):
+        growth_iterations = max(24, min(180, int(max(candidate_mask.shape[:2]) * 0.42)))
+        mask = _seed_connected_candidate_mask(strict_mask, candidate_mask, growth_iterations)
+        if int(np.count_nonzero(mask > 0)) < max(18, int(candidate_mask.size * OSM_WATER_MIN_PIXEL_RATIO)):
+            mask = strict_mask
+    else:
+        mask = candidate_mask
+
+    allowed_mask = _constraint_mask_from_prompt(prompt_mask, mask.shape)
+    if allowed_mask is not None:
+        constrained = cv2.bitwise_and(mask, allowed_mask)
+        if int(np.count_nonzero(constrained > 0)) >= 12:
+            mask = constrained
+
+    if int(np.count_nonzero(mask > 0)) < max(18, int(mask.size * OSM_WATER_MIN_PIXEL_RATIO)):
+        return None
+
+    kernel = np.ones((3, 3), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    close_size = 5
+    close_iterations = 2
+    if large_prompt:
+        close_size = max(7, min(15, int(min(mask.shape[:2]) * 0.018) | 1))
+        close_iterations = 2
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_size, close_size))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=close_iterations)
+    mask = cv2.dilate(mask, kernel, iterations=1)
+
+    components_count, labels, stats, centroids = cv2.connectedComponentsWithStats((mask > 0).astype("uint8"), 8)
+    if components_count <= 1:
+        return None
+
+    min_component_area = max(12, int(mask.size * OSM_WATER_MIN_PIXEL_RATIO))
+    max_area_ratio = OSM_WATER_LARGE_MAX_AREA_RATIO if large_prompt else OSM_WATER_MAX_AREA_RATIO
+    max_component_area = max(min_component_area * 3, int(mask.size * max_area_ratio))
+    crop_center = np.array([mask.shape[1] / 2.0, mask.shape[0] / 2.0])
+    max_center_distance = float(np.linalg.norm(crop_center)) or 1.0
+    keep = np.zeros(mask.shape, dtype="uint8")
+    candidates: list[tuple[float, int]] = []
+    for label in range(1, components_count):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        if area < min_component_area or area > max_component_area:
+            continue
+        component = labels == label
+        component_pixels = crop[component]
+        mean_rgb = np.mean(component_pixels, axis=0)
+        blue_green_balance = float((mean_rgb[2] + mean_rgb[1]) / 2.0 - mean_rgb[0])
+        saturation_mean = float(np.mean(s[component]))
+        centroid = centroids[label]
+        center_bonus = 1.0 - min(1.0, float(np.linalg.norm(centroid - crop_center) / max_center_distance))
+        touches_edge = (
+            stats[label, cv2.CC_STAT_LEFT] <= 1
+            or stats[label, cv2.CC_STAT_TOP] <= 1
+            or stats[label, cv2.CC_STAT_LEFT] + stats[label, cv2.CC_STAT_WIDTH] >= mask.shape[1] - 1
+            or stats[label, cv2.CC_STAT_TOP] + stats[label, cv2.CC_STAT_HEIGHT] >= mask.shape[0] - 1
+        )
+        edge_penalty = 0.85 if large_prompt and touches_edge else 0.5 if touches_edge else 1.0
+        color_bonus = max(0.0, blue_green_balance / 55.0) + max(0.0, (92.0 - saturation_mean) / 160.0)
+        score = area * (0.75 + color_bonus + center_bonus * 0.35) * edge_penalty
+        candidates.append((score, label))
+
+    if not candidates:
+        return None
+
+    candidates.sort(reverse=True)
+    kept_area = 0
+    max_kept_components = 8 if large_prompt else 3
+    for _, label in candidates[:max_kept_components]:
+        component = labels == label
+        area = int(np.count_nonzero(component))
+        if kept_area + area > max_component_area and kept_area > 0:
+            continue
+        keep[component] = 255
+        kept_area += area
+
+    water_pixels = int(np.count_nonzero(keep > 0))
+    if water_pixels < min_component_area:
+        return None
+
+    return keep, {
+        "backend": "osm-water",
+        "water_pixels": water_pixels,
+        "water_ratio": round(water_pixels / max(1, keep.size), 5),
+        "prompt_constraint": allowed_mask is not None,
+        "prompt_ratio": round(prompt_ratio, 5),
+        "large_prompt": large_prompt,
+        "min_pixel_ratio": OSM_WATER_MIN_PIXEL_RATIO,
+        "max_area_ratio": max_area_ratio,
+        "component_candidates": len(candidates),
+        "excluded_yellow_pixels": int(np.count_nonzero(yellow_beige_fill)),
+        "strict_water_pixels": int(np.count_nonzero(strict_mask > 0)),
+        "close_kernel": close_size,
+    }
+
+
+def _predict_osm_forest_crop_mask(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+) -> tuple[np.ndarray, dict[str, Any]] | None:
+    left, top, right, bottom = bbox
+    crop = np.array(image.crop((left, top, right, bottom)).convert("RGB"))
+    if crop.size == 0:
+        return None
+
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    r = crop[:, :, 0].astype(np.int16)
+    g = crop[:, :, 1].astype(np.int16)
+    b = crop[:, :, 2].astype(np.int16)
+    h = hsv[:, :, 0].astype(np.int16)
+    s = hsv[:, :, 1].astype(np.int16)
+    v = hsv[:, :, 2].astype(np.int16)
+
+    yellow_beige_fill = (
+        (h <= 44)
+        & (s >= 12)
+        & (v >= 135)
+        & (r >= b + 24)
+        & (g >= b + 8)
+        & (r >= g - 18)
+    )
+    water_like = (
+        (h >= 74)
+        & (h <= 125)
+        & (s >= 16)
+        & (v >= 105)
+        & (b >= r + 8)
+        & (b >= g - 18)
+    )
+    blue_cyan_water = (
+        (h >= 78)
+        & (h <= 116)
+        & (s >= 18)
+        & (v >= 112)
+        & (b >= r + 10)
+        & (b >= g - 8)
+    )
+    pale_blue_water = (
+        (h >= 70)
+        & (h <= 122)
+        & (s >= 8)
+        & (s <= 70)
+        & (v >= 132)
+        & (b >= r + 8)
+        & (b >= g - 4)
+    )
+    muted_blue_water = (
+        (h >= 54)
+        & (h <= 122)
+        & (s >= 6)
+        & (s <= 88)
+        & (v >= 112)
+        & (b >= r - 8)
+        & (b >= g - 20)
+        & (g <= b + 28)
+    )
+    strict_water_exclusion = water_like | blue_cyan_water | pale_blue_water
+    water_exclusion = strict_water_exclusion | (muted_blue_water & (g <= r + 12))
+    pale_field_like = (
+        (h <= 46)
+        & (s >= 8)
+        & (v >= 145)
+        & (r >= g - 8)
+        & (r >= b + 18)
+        & (g >= b + 6)
+    )
+    wetland_forest = (
+        (h >= 38)
+        & (h <= 68)
+        & (s >= 12)
+        & (s <= 82)
+        & (v >= 120)
+        & (v <= 238)
+        & (g >= r + 7)
+        & (g >= b + 4)
+        & ~yellow_beige_fill
+        & ~water_exclusion
+    )
+    pale_forest = (
+        (h >= 42)
+        & (h <= 86)
+        & (s >= 18)
+        & (s <= 118)
+        & (v >= 112)
+        & (v <= 238)
+        & (g >= r + 4)
+        & (g >= b + 2)
+        & ~yellow_beige_fill
+        & ~water_exclusion
+    )
+    strong_forest = (
+        (h >= 44)
+        & (h <= 94)
+        & (s >= 34)
+        & (v >= 70)
+        & (v <= 228)
+        & (g >= r + 8)
+        & (g >= b + 2)
+        & ~water_exclusion
+    )
+    muted_forest = (
+        (h >= 34)
+        & (h <= 76)
+        & (s >= 10)
+        & (s <= 82)
+        & (v >= 118)
+        & (v <= 235)
+        & (g >= r - 2)
+        & (g >= b + 2)
+        & (r >= b - 28)
+        & ~yellow_beige_fill
+        & ~water_exclusion
+    )
+    linear_forest = (
+        (h >= 34)
+        & (h <= 86)
+        & (s >= 8)
+        & (s <= 115)
+        & (v >= 105)
+        & (v <= 242)
+        & (g >= r + 1)
+        & (g >= b - 10)
+        & ~yellow_beige_fill
+        & ~strict_water_exclusion
+    )
+    pale_pattern_forest = (
+        (h >= 38)
+        & (h <= 92)
+        & (s >= 5)
+        & (s <= 90)
+        & (v >= 138)
+        & (v <= 248)
+        & (g >= r - 1)
+        & (g >= b - 12)
+        & ~pale_field_like
+        & ~strict_water_exclusion
+    )
+    broad_forest_fill = (
+        (h >= 34)
+        & (h <= 96)
+        & (s >= 3)
+        & (s <= 92)
+        & (v >= 122)
+        & (v <= 250)
+        & (g >= r - 5)
+        & (g >= b - 18)
+        & ~yellow_beige_fill
+        & ~pale_field_like
+        & ~strict_water_exclusion
+    )
+
+    prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image.size, image_extent, dilation_px=0)
+    prompt_pixels = int(np.count_nonzero(prompt_mask > 0)) if prompt_mask is not None else 0
+    prompt_ratio = prompt_pixels / max(1.0, float(crop.shape[0] * crop.shape[1]))
+    large_prompt = prompt_ratio >= OSM_FOREST_LARGE_PROMPT_RATIO or prompt_pixels >= 75_000
+
+    strict_mask = np.where(strong_forest | pale_forest, 255, 0).astype("uint8")
+    candidate_mask = np.where(
+        strong_forest
+        | pale_forest
+        | wetland_forest
+        | (muted_forest if large_prompt else (muted_forest & (s >= 18)))
+        | (linear_forest & (s >= 10)),
+        255,
+        0,
+    ).astype("uint8")
+    if prompt_mask is not None and prompt_pixels > 0:
+        candidate_mask = cv2.bitwise_or(candidate_mask, np.where(pale_pattern_forest, 255, 0).astype("uint8"))
+
+    prompt_candidate = None
+    if prompt_mask is not None and prompt_pixels > 0:
+        seed_mask = cv2.bitwise_and(candidate_mask, prompt_mask)
+        fill_candidate = cv2.bitwise_and(
+            np.where(broad_forest_fill | pale_pattern_forest, 255, 0).astype("uint8"),
+            prompt_mask,
+        )
+        if int(np.count_nonzero(seed_mask > 0)) >= max(12, int(candidate_mask.size * OSM_FOREST_MIN_PIXEL_RATIO * 0.2)):
+            growth_iterations = max(30, min(260, int(max(candidate_mask.shape[:2]) * 0.55)))
+            prompt_candidate = _seed_connected_candidate_mask(seed_mask, fill_candidate, growth_iterations)
+        else:
+            prompt_candidate = cv2.bitwise_and(candidate_mask, prompt_mask)
+
+    if prompt_candidate is not None and int(np.count_nonzero(prompt_candidate > 0)) >= max(24, int(candidate_mask.size * OSM_FOREST_MIN_PIXEL_RATIO)):
+        mask = prompt_candidate
+    elif large_prompt and int(np.count_nonzero(strict_mask > 0)) >= max(20, int(candidate_mask.size * OSM_FOREST_MIN_PIXEL_RATIO * 0.35)):
+        growth_iterations = max(20, min(160, int(max(candidate_mask.shape[:2]) * 0.36)))
+        mask = _seed_connected_candidate_mask(strict_mask, candidate_mask, growth_iterations)
+        if int(np.count_nonzero(mask > 0)) < max(24, int(candidate_mask.size * OSM_FOREST_MIN_PIXEL_RATIO)):
+            mask = strict_mask
+    else:
+        mask = candidate_mask
+
+    allowed_mask = _constraint_mask_from_prompt(prompt_mask, mask.shape)
+    if allowed_mask is not None:
+        constrained = cv2.bitwise_and(mask, allowed_mask)
+        if int(np.count_nonzero(constrained > 0)) >= 18:
+            mask = constrained
+
+    if int(np.count_nonzero(mask > 0)) < max(24, int(mask.size * OSM_FOREST_MIN_PIXEL_RATIO)):
+        return None
+
+    kernel = np.ones((3, 3), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    close_size = 7
+    close_iterations = 2
+    if large_prompt:
+        close_size = max(9, min(25, int(min(mask.shape[:2]) * 0.035) | 1))
+        close_iterations = 2
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_size, close_size))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=close_iterations)
+    mask = cv2.dilate(mask, kernel, iterations=1)
+
+    components_count, labels, stats, centroids = cv2.connectedComponentsWithStats((mask > 0).astype("uint8"), 8)
+    if components_count <= 1:
+        return None
+
+    min_component_area = max(18, int(mask.size * OSM_FOREST_MIN_PIXEL_RATIO))
+    max_area_ratio = OSM_FOREST_LARGE_MAX_AREA_RATIO if large_prompt else OSM_FOREST_MAX_AREA_RATIO
+    max_component_area = max(min_component_area * 3, int(mask.size * max_area_ratio))
+    crop_center = np.array([mask.shape[1] / 2.0, mask.shape[0] / 2.0])
+    max_center_distance = float(np.linalg.norm(crop_center)) or 1.0
+    prompt_core = (prompt_mask > 0) if prompt_mask is not None else None
+    keep = np.zeros(mask.shape, dtype="uint8")
+    candidates: list[tuple[float, int]] = []
+    for label in range(1, components_count):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        if area < min_component_area or area > max_component_area:
+            continue
+        component = labels == label
+        prompt_overlap_bonus = 0.0
+        if prompt_core is not None:
+            overlap_pixels = int(np.count_nonzero(component & prompt_core))
+            if overlap_pixels < max(4, min(24, int(area * 0.04))):
+                continue
+            prompt_overlap_bonus = min(1.2, overlap_pixels / max(1.0, float(area))) + min(0.8, overlap_pixels / max(1.0, float(prompt_pixels)))
+        component_pixels = crop[component]
+        mean_rgb = np.mean(component_pixels, axis=0)
+        saturation_mean = float(np.mean(s[component]))
+        component_pale_pattern_pixels = int(np.count_nonzero(pale_pattern_forest & component))
+        pale_pattern_ratio = component_pale_pattern_pixels / max(1.0, float(area))
+        component_broad_fill_pixels = int(np.count_nonzero(broad_forest_fill & component))
+        broad_fill_ratio = component_broad_fill_pixels / max(1.0, float(area))
+        component_green_pixels = int(np.count_nonzero((strong_forest | pale_forest | wetland_forest | linear_forest | pale_pattern_forest | broad_forest_fill) & component))
+        green_pixel_ratio = component_green_pixels / max(1.0, float(area))
+        min_green_ratio = 0.16 if max(pale_pattern_ratio, broad_fill_ratio) >= 0.45 else 0.35
+        if green_pixel_ratio < min_green_ratio:
+            continue
+        if max(pale_pattern_ratio, broad_fill_ratio) < 0.45 and float(mean_rgb[2]) >= float(mean_rgb[1]) - 8.0 and saturation_mean < 58.0:
+            continue
+        green_balance = float(mean_rgb[1] - max(mean_rgb[0], mean_rgb[2]) * 0.72)
+        centroid = centroids[label]
+        center_bonus = 1.0 - min(1.0, float(np.linalg.norm(centroid - crop_center) / max_center_distance))
+        touches_edge = (
+            stats[label, cv2.CC_STAT_LEFT] <= 1
+            or stats[label, cv2.CC_STAT_TOP] <= 1
+            or stats[label, cv2.CC_STAT_LEFT] + stats[label, cv2.CC_STAT_WIDTH] >= mask.shape[1] - 1
+            or stats[label, cv2.CC_STAT_TOP] + stats[label, cv2.CC_STAT_HEIGHT] >= mask.shape[0] - 1
+        )
+        edge_penalty = 0.88 if large_prompt and touches_edge else 0.58 if touches_edge else 1.0
+        color_bonus = max(0.0, green_balance / 80.0) + max(0.0, min(90.0, saturation_mean) / 180.0)
+        score = (area ** 0.82) * (0.72 + color_bonus + center_bonus * 0.2 + prompt_overlap_bonus) * edge_penalty
+        candidates.append((score, label))
+
+    if not candidates:
+        return None
+
+    candidates.sort(reverse=True)
+    kept_area = 0
+    max_kept_components = 12 if large_prompt else 5
+    for _, label in candidates[:max_kept_components]:
+        component = labels == label
+        area = int(np.count_nonzero(component))
+        if kept_area + area > max_component_area and kept_area > 0:
+            continue
+        keep[component] = 255
+        kept_area += area
+
+    forest_pixels = int(np.count_nonzero(keep > 0))
+    if forest_pixels < min_component_area:
+        return None
+    if prompt_mask is not None and prompt_pixels > 0:
+        prompt_coverage = forest_pixels / max(1.0, float(prompt_pixels))
+        if prompt_coverage < 0.18:
+            return None
+
+    return keep, {
+        "backend": "osm-forest",
+        "forest_pixels": forest_pixels,
+        "forest_ratio": round(forest_pixels / max(1, keep.size), 5),
+        "prompt_coverage": round(forest_pixels / max(1.0, float(prompt_pixels)), 5) if prompt_pixels else None,
+        "prompt_constraint": allowed_mask is not None,
+        "prompt_ratio": round(prompt_ratio, 5),
+        "large_prompt": large_prompt,
+        "min_pixel_ratio": OSM_FOREST_MIN_PIXEL_RATIO,
+        "max_area_ratio": max_area_ratio,
+        "component_candidates": len(candidates),
+        "excluded_water_like_pixels": int(np.count_nonzero(water_exclusion)),
+        "excluded_yellow_pixels": int(np.count_nonzero(yellow_beige_fill)),
+        "strict_forest_pixels": int(np.count_nonzero(strict_mask > 0)),
+        "close_kernel": close_size,
+    }
+
+
+def _predict_osm_local_rf_crop_mask(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+    target_type: Literal["water", "forest"],
+) -> tuple[np.ndarray, dict[str, Any]] | None:
+    if not OSM_LOCAL_RF_ENABLED:
+        return None
+
+    crop = np.array(image.crop(bbox).convert("RGB"))
+    if crop.size == 0:
+        return None
+
+    prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image.size, image_extent, dilation_px=0)
+    if prompt_mask is None or int(np.count_nonzero(prompt_mask > 0)) < 48:
+        return None
+
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    r = crop[:, :, 0].astype(np.int16)
+    g = crop[:, :, 1].astype(np.int16)
+    b = crop[:, :, 2].astype(np.int16)
+    h = hsv[:, :, 0].astype(np.int16)
+    s = hsv[:, :, 1].astype(np.int16)
+    v = hsv[:, :, 2].astype(np.int16)
+
+    yellow_beige_fill = (
+        (h <= 46)
+        & (s >= 12)
+        & (v >= 135)
+        & (r >= b + 22)
+        & (g >= b + 8)
+        & (r >= g - 18)
+    )
+    water_seed = (
+        (
+            (h >= 74)
+            & (h <= 122)
+            & (s >= 16)
+            & (v >= 110)
+            & (b >= r + 8)
+            & (b >= g - 14)
+        )
+        | (
+            (h >= 84)
+            & (h <= 125)
+            & (s >= 48)
+            & (v >= 75)
+            & (b >= r + 16)
+            & (b >= g - 28)
+        )
+    ) & ~yellow_beige_fill
+    water_candidate = (
+        water_seed
+        | (
+            (h >= 48)
+            & (h <= 122)
+            & (s >= 6)
+            & (s <= 105)
+            & (v >= 105)
+            & (b >= r - 22)
+            & (g >= r - 18)
+            & ~yellow_beige_fill
+        )
+    )
+    forest_seed = (
+        (
+            (h >= 42)
+            & (h <= 96)
+            & (s >= 16)
+            & (v >= 90)
+            & (v <= 240)
+            & (g >= r + 3)
+            & (g >= b - 4)
+        )
+        | (
+            (h >= 34)
+            & (h <= 92)
+            & (s >= 6)
+            & (s <= 105)
+            & (v >= 118)
+            & (v <= 250)
+            & (g >= r - 2)
+            & (g >= b - 14)
+        )
+    ) & ~water_seed & ~yellow_beige_fill
+    forest_candidate = (
+        forest_seed
+        | (
+            (h >= 32)
+            & (h <= 98)
+            & (s >= 3)
+            & (s <= 100)
+            & (v >= 112)
+            & (v <= 252)
+            & (g >= r - 7)
+            & (g >= b - 20)
+            & ~water_seed
+            & ~yellow_beige_fill
+        )
+    )
+    forest_soft_fill = (
+        (h >= 30)
+        & (h <= 102)
+        & (s >= 2)
+        & (s <= 96)
+        & (v >= 118)
+        & (v <= 254)
+        & (g >= r - 10)
+        & (g >= b - 24)
+        & (r <= b + 44)
+        & ~water_seed
+        & ~yellow_beige_fill
+    )
+
+    prompt_bool = prompt_mask > 0
+    outside_prompt = ~(_constraint_mask_from_prompt(prompt_mask, crop.shape[:2]) > 0)
+    if target_type == "water":
+        positive_mask = water_seed & prompt_bool
+        candidate_mask = water_candidate & prompt_bool
+        negative_mask = ((forest_seed | yellow_beige_fill) & prompt_bool) | outside_prompt
+        min_coverage = 0.06
+    else:
+        positive_mask = forest_seed & prompt_bool
+        candidate_mask = (forest_candidate | forest_soft_fill) & prompt_bool
+        negative_mask = (water_seed & prompt_bool) | yellow_beige_fill | outside_prompt
+        min_coverage = OSM_LOCAL_RF_MIN_COVERAGE
+
+    if int(np.count_nonzero(positive_mask)) < OSM_LOCAL_RF_MIN_POSITIVE:
+        relaxed_positive = candidate_mask & prompt_bool
+        if int(np.count_nonzero(relaxed_positive)) >= OSM_LOCAL_RF_MIN_POSITIVE:
+            positive_mask = relaxed_positive
+        else:
+            return None
+
+    prediction = _predict_with_local_random_forest(crop, positive_mask, negative_mask, candidate_mask)
+    if prediction is None:
+        return None
+
+    mask, model_meta = prediction
+    kernel = np.ones((3, 3), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    close_size = max(5, min(19, int(min(mask.shape[:2]) * 0.025) | 1))
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_size, close_size))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=2)
+    mask = cv2.bitwise_and(mask, prompt_mask)
+    if target_type == "forest":
+        soft_candidate = np.where(forest_soft_fill & prompt_bool, 255, 0).astype("uint8")
+        growth_iterations = max(20, min(180, int(max(mask.shape[:2]) * 0.32)))
+        grown = _seed_connected_candidate_mask(mask, soft_candidate, growth_iterations)
+        if int(np.count_nonzero(grown > 0)) >= int(np.count_nonzero(mask > 0)):
+            max_growth_pixels = max(int(np.count_nonzero(prompt_bool) * 0.82), int(np.count_nonzero(mask > 0) * 1.8))
+            if int(np.count_nonzero(grown > 0)) <= max_growth_pixels:
+                mask = grown
+        mask = cv2.bitwise_and(mask, prompt_mask)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.bitwise_and(mask, prompt_mask)
+
+    prompt_pixels = int(np.count_nonzero(prompt_bool))
+    predicted_pixels = int(np.count_nonzero(mask > 0))
+    if predicted_pixels < max(24, int(prompt_pixels * min_coverage)):
+        return None
+
+    return mask, {
+        "backend": "osm-local-rf",
+        "target_type": target_type,
+        "predicted_pixels": predicted_pixels,
+        "prompt_coverage": round(predicted_pixels / max(1.0, float(prompt_pixels)), 5),
+        "positive_pixels": int(np.count_nonzero(positive_mask)),
+        "negative_pixels": int(np.count_nonzero(negative_mask)),
+        "candidate_pixels": int(np.count_nonzero(candidate_mask)),
+        "close_kernel": close_size,
+        **model_meta,
+    }
+
+
+def _border_background_distance_mask(crop: np.ndarray) -> tuple[np.ndarray, dict[str, Any]] | None:
+    height, width = crop.shape[:2]
+    if height < 12 or width < 12:
+        return None
+
+    border_px = max(4, min(18, min(height, width) // 12))
+    border_mask = np.zeros((height, width), dtype=bool)
+    border_mask[:border_px, :] = True
+    border_mask[-border_px:, :] = True
+    border_mask[:, :border_px] = True
+    border_mask[:, -border_px:] = True
+
+    lab = cv2.cvtColor(crop, cv2.COLOR_RGB2LAB).astype("float32")
+    hsv = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+    border_samples = lab[border_mask]
+    if len(border_samples) < 16:
+        return None
+
+    mean = np.mean(border_samples, axis=0)
+    std = np.maximum(np.std(border_samples, axis=0), 5.0)
+    distance = np.sqrt(np.mean(((lab - mean) / std) ** 2, axis=2))
+    border_distance = distance[border_mask]
+    threshold = max(1.55, float(np.percentile(border_distance, 94) + 0.55))
+
+    saturation = hsv[:, :, 1]
+    value = hsv[:, :, 2]
+    candidate = (distance > threshold) & (value > 105) & (value < 248) & (saturation < 140)
+    candidate &= ~border_mask
+
+    mask = np.where(candidate, 255, 0).astype("uint8")
+    if int(np.count_nonzero(mask > 0)) < max(18, int(mask.size * OSM_FILL_MIN_PIXEL_RATIO)):
+        return None
+
+    kernel = np.ones((3, 3), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    close_kernel_size = max(5, min(13, (min(height, width) // 18) | 1))
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_kernel_size, close_kernel_size))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=2)
+
+    return mask, {
+        "border_px": int(border_px),
+        "distance_threshold": round(threshold, 4),
+    }
+
+
+def _predict_osm_fill_crop_mask(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+) -> tuple[np.ndarray, dict[str, Any]] | None:
+    left, top, right, bottom = bbox
+    crop = np.array(image.crop((left, top, right, bottom)).convert("RGB"))
+    if crop.size == 0:
+        return None
+
+    result = _border_background_distance_mask(crop)
+    if result is None:
+        return None
+    mask, distance_meta = result
+
+    prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image.size, image_extent, dilation_px=0)
+    allowed_mask = _constraint_mask_from_prompt(prompt_mask, mask.shape)
+    if allowed_mask is not None:
+        constrained = cv2.bitwise_and(mask, allowed_mask)
+        if int(np.count_nonzero(constrained > 0)) >= 12:
+            mask = constrained
+
+    components_count, labels, stats, centroids = cv2.connectedComponentsWithStats((mask > 0).astype("uint8"), 8)
+    if components_count <= 1:
+        return None
+
+    crop_area = float(mask.size)
+    min_component_area = max(16, int(crop_area * OSM_FILL_MIN_PIXEL_RATIO))
+    max_component_area = int(crop_area * OSM_FILL_MAX_AREA_RATIO)
+    crop_center = np.array([mask.shape[1] / 2.0, mask.shape[0] / 2.0])
+    max_center_distance = float(np.linalg.norm(crop_center)) or 1.0
+
+    candidates: list[tuple[float, int]] = []
+    for label in range(1, components_count):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        if area < min_component_area or area > max_component_area:
+            continue
+        x = int(stats[label, cv2.CC_STAT_LEFT])
+        y = int(stats[label, cv2.CC_STAT_TOP])
+        w = int(stats[label, cv2.CC_STAT_WIDTH])
+        h = int(stats[label, cv2.CC_STAT_HEIGHT])
+        if w < 4 or h < 4:
+            continue
+        fill_ratio = area / max(1.0, float(w * h))
+        if fill_ratio < 0.08:
+            continue
+        centroid = centroids[label]
+        center_bonus = 1.0 - min(1.0, float(np.linalg.norm(centroid - crop_center) / max_center_distance))
+        edge_penalty = 0.55 if x <= 1 or y <= 1 or x + w >= mask.shape[1] - 1 or y + h >= mask.shape[0] - 1 else 1.0
+        score = area * (0.75 + center_bonus * 0.5) * edge_penalty
+        candidates.append((score, label))
+
+    if not candidates:
+        return None
+
+    candidates.sort(reverse=True)
+    keep = np.zeros(mask.shape, dtype="uint8")
+    kept_area = 0
+    for _, label in candidates[:4]:
+        component = labels == label
+        area = int(np.count_nonzero(component))
+        if kept_area + area > max_component_area and kept_area > 0:
+            continue
+        keep[component] = 255
+        kept_area += area
+
+    if kept_area < min_component_area:
+        return None
+
+    kernel = np.ones((3, 3), np.uint8)
+    keep = cv2.morphologyEx(keep, cv2.MORPH_CLOSE, kernel)
+    fill_pixels = int(np.count_nonzero(keep > 0))
+    return keep, {
+        "backend": "osm-fill",
+        "fill_pixels": fill_pixels,
+        "fill_ratio": round(fill_pixels / max(1.0, crop_area), 5),
+        "component_candidates": len(candidates),
+        "prompt_constraint": allowed_mask is not None,
+        "min_pixel_ratio": OSM_FILL_MIN_PIXEL_RATIO,
+        "max_area_ratio": OSM_FILL_MAX_AREA_RATIO,
+        **distance_meta,
+    }
 
 
 def _dilate_binary_mask(mask: np.ndarray, ratio: float, max_px: int, min_px: int = 6) -> np.ndarray:
@@ -1002,6 +2007,140 @@ def _segment_with_prompt_ml(
     }
 
 
+def _segment_with_osm_water(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+) -> tuple[dict, float, dict] | None:
+    water_result = _predict_osm_water_crop_mask(image, bbox, prompt_geometry, image_extent)
+    if water_result is None:
+        return None
+
+    crop_mask, water_meta = water_result
+    full_mask = _full_mask_from_crop_mask(crop_mask, image, bbox)
+    polygon = _mask_to_polygon(
+        full_mask,
+        bbox,
+        image.size,
+        image_extent,
+        prompt_geometry,
+        simplify_ratio=OSM_WATER_LARGE_SIMPLIFY_RATIO if water_meta.get("large_prompt") else OSM_WATER_SIMPLIFY_RATIO,
+    )
+    if polygon is None:
+        return None
+
+    geometry, geometry_confidence, point_count = polygon
+    water_ratio = float(np.count_nonzero(crop_mask > 0)) / max(1.0, float(crop_mask.size))
+    confidence = min(0.92, max(0.42, (geometry_confidence + min(0.9, water_ratio * 8.0 + 0.35)) / 2))
+    return geometry, confidence, {
+        **water_meta,
+        "point_count": point_count,
+        "simplify_ratio": OSM_WATER_LARGE_SIMPLIFY_RATIO if water_meta.get("large_prompt") else OSM_WATER_SIMPLIFY_RATIO,
+    }
+
+
+def _segment_with_osm_forest(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+) -> tuple[dict, float, dict] | None:
+    forest_result = _predict_osm_forest_crop_mask(image, bbox, prompt_geometry, image_extent)
+    if forest_result is None:
+        return None
+
+    crop_mask, forest_meta = forest_result
+    full_mask = _full_mask_from_crop_mask(crop_mask, image, bbox)
+    polygon = _mask_to_polygon(
+        full_mask,
+        bbox,
+        image.size,
+        image_extent,
+        prompt_geometry,
+        simplify_ratio=OSM_FOREST_LARGE_SIMPLIFY_RATIO if forest_meta.get("large_prompt") else OSM_FOREST_SIMPLIFY_RATIO,
+    )
+    if polygon is None:
+        return None
+
+    geometry, geometry_confidence, point_count = polygon
+    forest_ratio = float(np.count_nonzero(crop_mask > 0)) / max(1.0, float(crop_mask.size))
+    confidence = min(0.88, max(0.38, (geometry_confidence + min(0.86, forest_ratio * 4.5 + 0.32)) / 2))
+    return geometry, confidence, {
+        **forest_meta,
+        "point_count": point_count,
+        "simplify_ratio": OSM_FOREST_LARGE_SIMPLIFY_RATIO if forest_meta.get("large_prompt") else OSM_FOREST_SIMPLIFY_RATIO,
+    }
+
+
+def _segment_with_osm_local_rf(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+    target_type: Literal["water", "forest"],
+) -> tuple[dict, float, dict] | None:
+    ml_result = _predict_osm_local_rf_crop_mask(image, bbox, prompt_geometry, image_extent, target_type)
+    if ml_result is None:
+        return None
+
+    crop_mask, ml_meta = ml_result
+    full_mask = _full_mask_from_crop_mask(crop_mask, image, bbox)
+    simplify_ratio = OSM_WATER_LARGE_SIMPLIFY_RATIO if target_type == "water" else OSM_FOREST_LARGE_SIMPLIFY_RATIO
+    polygon = _mask_to_polygon(
+        full_mask,
+        bbox,
+        image.size,
+        image_extent,
+        prompt_geometry,
+        simplify_ratio=simplify_ratio,
+    )
+    if polygon is None:
+        return None
+
+    geometry, geometry_confidence, point_count = polygon
+    predicted_ratio = float(np.count_nonzero(crop_mask > 0)) / max(1.0, float(crop_mask.size))
+    confidence = min(0.86, max(0.36, (geometry_confidence + min(0.82, predicted_ratio * 4.0 + 0.28)) / 2))
+    return geometry, confidence, {
+        **ml_meta,
+        "point_count": point_count,
+        "simplify_ratio": simplify_ratio,
+    }
+
+
+def _segment_with_osm_fill(
+    image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    prompt_geometry: dict | None,
+    image_extent: list[float] | None,
+) -> tuple[dict, float, dict] | None:
+    fill_result = _predict_osm_fill_crop_mask(image, bbox, prompt_geometry, image_extent)
+    if fill_result is None:
+        return None
+
+    crop_mask, fill_meta = fill_result
+    full_mask = _full_mask_from_crop_mask(crop_mask, image, bbox)
+    polygon = _mask_to_polygon(
+        full_mask,
+        bbox,
+        image.size,
+        image_extent,
+        prompt_geometry,
+        simplify_ratio=OSM_FILL_SIMPLIFY_RATIO,
+    )
+    if polygon is None:
+        return None
+
+    geometry, geometry_confidence, point_count = polygon
+    fill_ratio = float(np.count_nonzero(crop_mask > 0)) / max(1.0, float(crop_mask.size))
+    confidence = min(0.78, max(0.32, (geometry_confidence + min(0.75, fill_ratio * 4.0 + 0.22)) / 2))
+    return geometry, confidence, {
+        **fill_meta,
+        "point_count": point_count,
+        "simplify_ratio": OSM_FILL_SIMPLIFY_RATIO,
+    }
+
+
 def _segment_with_prompt_ml_sam2(
     image: Image.Image,
     bbox: tuple[int, int, int, int],
@@ -1030,6 +2169,7 @@ def _segment_with_prompt_ml_sam2(
             prompt_geometry,
             image_extent,
             mask_input=mask_input,
+            mask_constraint=full_mask,
             backend_name="prompt-ml+sam2",
         )
         if sam2_result is not None:
@@ -1070,6 +2210,7 @@ def _segment_with_sam2(
     prompt_geometry: dict | None,
     image_extent: list[float] | None,
     mask_input: np.ndarray | None = None,
+    mask_constraint: np.ndarray | None = None,
     backend_name: str | None = None,
 ) -> tuple[dict, float, dict] | None:
     sam2 = _ensure_sam2_predictor()
@@ -1118,7 +2259,8 @@ def _segment_with_sam2(
         except Exception:
             pass
 
-    polygon = _mask_to_polygon(masks[best_index], bbox, image.size, image_extent, prompt_geometry)
+    selected_mask = _constrain_refined_mask(masks[best_index], mask_constraint)
+    polygon = _mask_to_polygon(selected_mask, bbox, image.size, image_extent, prompt_geometry)
     if polygon is None:
         return None
 
@@ -1135,6 +2277,7 @@ def _segment_with_sam2(
         "prompt_mask_used": prompt_mask is not None,
         "prompt_constraint": prompt_mask is not None,
         "mask_input_used": mask_input is not None,
+        "mask_constraint_used": mask_constraint is not None,
     }
 
 
@@ -1179,6 +2322,7 @@ def _segment_with_water_sam2(
             prompt_geometry,
             image_extent,
             mask_input=mask_input,
+            mask_constraint=full_mask,
             backend_name="water-unet+sam2",
         )
         if sam2_result is not None:
@@ -1317,11 +2461,133 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
             status="fallback",
             geometry=geometry,
             confidence=0.2,
-            message="Prototype service currently returns polygon suggestions. Edit the result manually if needed.",
+            message="AI-предложение сейчас возвращает полигон. Проверьте и при необходимости отредактируйте результат.",
             meta={"backend": "classical-cv", "reason": "target_geometry_type_not_supported"},
         )
 
     fallback_reason: str | None = None
+    water_target_layer = payload.target_semantic_type == "water" or _is_water_target_layer(payload.target_layer_name)
+    forest_target_layer = payload.target_semantic_type == "forest" or _is_forest_target_layer(payload.target_layer_name)
+    allow_osm_water = water_target_layer or (OSM_WATER_HEURISTIC_ENABLED and not forest_target_layer)
+    allow_osm_forest = forest_target_layer or (OSM_FOREST_HEURISTIC_ENABLED and not water_target_layer)
+    allow_osm_fill = OSM_FILL_HEURISTIC_ENABLED and not water_target_layer and not forest_target_layer
+    osm_water_result = (
+        _segment_with_osm_water(image, bbox, payload.prompt_geometry, payload.image_extent)
+        if allow_osm_water
+        else None
+    )
+    if osm_water_result is not None:
+        geometry, confidence, meta = osm_water_result
+        quality = _evaluate_prompt_quality(
+            geometry,
+            payload.prompt_geometry,
+            bbox,
+            (width, height),
+            payload.image_extent,
+            rough_prompt=True,
+        )
+        if quality.get("passed", True):
+            return SegmentBoxResponse(
+                status="passed",
+                geometry=geometry,
+                confidence=confidence,
+                message="AI-предложение построено по водным цветам OSM. Проверьте и при необходимости отредактируйте контур.",
+                meta={**meta, "quality_gate": quality},
+            )
+        fallback_reason = f"osm_water_rejected:{quality.get('reason')}"
+    elif allow_osm_water:
+        fallback_reason = "osm_water_no_mask"
+
+    osm_forest_result = (
+        _segment_with_osm_forest(image, bbox, payload.prompt_geometry, payload.image_extent)
+        if allow_osm_forest
+        else None
+    )
+    if osm_forest_result is not None:
+        geometry, confidence, meta = osm_forest_result
+        quality = _evaluate_prompt_quality(
+            geometry,
+            payload.prompt_geometry,
+            bbox,
+            (width, height),
+            payload.image_extent,
+            rough_prompt=True,
+        )
+        if quality.get("passed", True):
+            return SegmentBoxResponse(
+                status="passed",
+                geometry=geometry,
+                confidence=confidence,
+                message="AI suggestion was built from OSM forest/wood colors. Review and edit the contour if needed.",
+                meta={**meta, "quality_gate": quality},
+            )
+        fallback_reason = f"osm_forest_rejected:{quality.get('reason')}"
+    elif allow_osm_forest:
+        fallback_reason = "osm_forest_no_mask"
+
+    osm_fill_result = _segment_with_osm_fill(image, bbox, payload.prompt_geometry, payload.image_extent) if allow_osm_fill else None
+    if osm_fill_result is not None:
+        geometry, confidence, meta = osm_fill_result
+        quality = _evaluate_prompt_quality(
+            geometry,
+            payload.prompt_geometry,
+            bbox,
+            (width, height),
+            payload.image_extent,
+            rough_prompt=True,
+        )
+        if quality.get("passed", True):
+            return SegmentBoxResponse(
+                status="passed",
+                geometry=geometry,
+                confidence=confidence,
+                message="AI-предложение построено по заливке на OSM. Проверьте и при необходимости отредактируйте контур.",
+                meta={**meta, "quality_gate": quality},
+            )
+        fallback_reason = f"osm_fill_rejected:{quality.get('reason')}"
+
+    target_rf_type: Literal["water", "forest"] | None = "water" if water_target_layer else "forest" if forest_target_layer else None
+    if target_rf_type is not None:
+        osm_rf_result = _segment_with_osm_local_rf(image, bbox, payload.prompt_geometry, payload.image_extent, target_rf_type)
+        if osm_rf_result is not None:
+            geometry, confidence, meta = osm_rf_result
+            quality = _evaluate_prompt_quality(
+                geometry,
+                payload.prompt_geometry,
+                bbox,
+                (width, height),
+                payload.image_extent,
+                rough_prompt=True,
+            )
+            if quality.get("passed", True):
+                return SegmentBoxResponse(
+                    status="passed",
+                    geometry=geometry,
+                    confidence=confidence,
+                    message="AI-предложение построено локальной ML-моделью Random Forest по пикселям OSM. Проверьте и при необходимости отредактируйте контур.",
+                    meta={**meta, "quality_gate": quality},
+                )
+            fallback_reason = f"osm_local_rf_rejected:{quality.get('reason')}"
+        elif fallback_reason is None:
+            fallback_reason = "osm_local_rf_no_mask"
+
+    if water_target_layer or forest_target_layer:
+        return SegmentBoxResponse(
+            status="fallback",
+            geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
+            confidence=0.2,
+            message="AI-предложение не найдено надёжно для выбранного типа слоя. Возвращён контур пользователя, чтобы не подменять объект другим классом.",
+            meta={
+                "backend": "target-class-guard",
+                "target_layer_name": payload.target_layer_name,
+                "target_semantic_type": payload.target_semantic_type,
+                "water_target_layer": water_target_layer,
+                "forest_target_layer": forest_target_layer,
+                "reason": fallback_reason or "target_class_not_detected",
+                "skipped_generic_prompt_ml": True,
+            },
+        )
+
     if AI_DIGITIZER_BACKEND in PROMPT_ML_SAM2_BACKENDS:
         try:
             prompt_ml_sam2_result = _segment_with_prompt_ml_sam2(image, bbox, payload.prompt_geometry, payload.image_extent)
@@ -1340,14 +2606,14 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
                         status="fallback",
                         geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
                         confidence=0.2,
-                        message="AI contour was rejected because it was worse than the student's draft. Returned the student's contour.",
+                        message="AI-предложение отклонено: контур хуже черновика. Возвращен контур пользователя.",
                         meta={**meta, "quality_gate": quality, "rejected_backend": meta.get("backend", "prompt-ml+sam2")},
                     )
                 return SegmentBoxResponse(
                     status="passed",
                     geometry=geometry,
                     confidence=confidence,
-                    message="Prompt-based pixel classifier created a mask and SAM2 refined it. Review and edit the contour before submitting.",
+                    message="AI-предложение построено по подсказке и уточнено SAM2. Проверьте и отредактируйте контур при необходимости.",
                     meta={**meta, "quality_gate": quality},
                 )
             fallback_reason = "prompt_ml_sam2_no_mask"
@@ -1372,14 +2638,14 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
                         status="fallback",
                         geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
                         confidence=0.2,
-                        message="AI contour was rejected because it was worse than the student's draft. Returned the student's contour.",
+                        message="AI-предложение отклонено: контур хуже черновика. Возвращен контур пользователя.",
                         meta={**meta, "quality_gate": quality, "rejected_backend": "prompt-ml"},
                     )
                 return SegmentBoxResponse(
                     status="passed",
                     geometry=geometry,
                     confidence=confidence,
-                    message="Prompt-based pixel classifier generated a contour. Review and edit it before submitting.",
+                    message="AI-предложение построено по подсказке и пикселям карты. Проверьте и отредактируйте контур при необходимости.",
                     meta={**meta, "quality_gate": quality},
                 )
             fallback_reason = "prompt_ml_no_mask"
@@ -1397,14 +2663,14 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
                         status="fallback",
                         geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
                         confidence=0.2,
-                        message="AI contour was rejected because it was worse than the student's draft. Returned the student's contour.",
+                        message="AI-предложение отклонено: контур хуже черновика. Возвращен контур пользователя.",
                         meta={**meta, "quality_gate": quality, "rejected_backend": meta.get("backend", "water-unet+sam2")},
                     )
                 return SegmentBoxResponse(
                     status="passed",
                     geometry=geometry,
                     confidence=confidence,
-                    message="Water model created a coarse mask and SAM2 refined it. Review and edit the contour before submitting.",
+                    message="AI-предложение водного объекта уточнено SAM2. Проверьте и отредактируйте контур при необходимости.",
                     meta={**meta, "quality_gate": quality},
                 )
             fallback_reason = "water_sam2_no_mask"
@@ -1422,14 +2688,14 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
                         status="fallback",
                         geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
                         confidence=0.2,
-                        message="AI contour was rejected because it was worse than the student's draft. Returned the student's contour.",
+                        message="AI-предложение отклонено: контур хуже черновика. Возвращен контур пользователя.",
                         meta={**meta, "quality_gate": quality, "rejected_backend": "water-unet"},
                     )
                 return SegmentBoxResponse(
                     status="passed",
                     geometry=geometry,
                     confidence=confidence,
-                    message="Water segmentation model generated a contour. Review and edit it before submitting.",
+                    message="AI-предложение водного объекта построено моделью сегментации. Проверьте и отредактируйте контур при необходимости.",
                     meta={**meta, "quality_gate": quality},
                 )
             fallback_reason = "water_unet_no_mask"
@@ -1447,19 +2713,39 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
                         status="fallback",
                         geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
                         confidence=0.2,
-                        message="AI contour was rejected because it was worse than the student's draft. Returned the student's contour.",
+                        message="AI-предложение отклонено: контур хуже черновика. Возвращен контур пользователя.",
                         meta={**meta, "quality_gate": quality, "rejected_backend": meta.get("backend", "sam2")},
                     )
                 return SegmentBoxResponse(
                     status="passed",
                     geometry=geometry,
                     confidence=confidence,
-                    message="GeoSAM/SAM2 generated a contour from the student's prompt. Review and edit it before submitting.",
+                    message="AI-предложение построено SAM2 по подсказке. Проверьте и отредактируйте контур при необходимости.",
                     meta={**meta, "quality_gate": quality},
                 )
             fallback_reason = "sam2_no_mask"
         except RuntimeError as exc:
             fallback_reason = str(exc)
+
+    configured_ai_backends = (
+        PROMPT_ML_BACKENDS
+        | PROMPT_ML_SAM2_BACKENDS
+        | WATER_UNET_BACKENDS
+        | WATER_SAM2_BACKENDS
+        | SAM2_BACKENDS
+    )
+    if AI_DIGITIZER_BACKEND in configured_ai_backends and fallback_reason and payload.prompt_geometry:
+        return SegmentBoxResponse(
+            status="fallback",
+            geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
+            confidence=0.2,
+            message="AI-предложение ненадежно. Возвращен исходный контур для ручного редактирования.",
+            meta={
+                "backend": AI_DIGITIZER_BACKEND,
+                "reason": fallback_reason,
+                "fallback": "student_prompt",
+            },
+        )
 
     contour = _segment_largest_contour(image, bbox, payload.prompt_geometry, payload.image_extent)
     if contour is None:
@@ -1468,7 +2754,7 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
             status="fallback",
             geometry=geometry,
             confidence=0.25,
-            message="No reliable contour was found. Returned the selected box as a draft polygon.",
+            message="Надежный контур не найден. Возвращена выбранная область как черновой полигон.",
             meta={"backend": "classical-cv", "fallback_from": AI_DIGITIZER_BACKEND, "reason": fallback_reason or "no_contour"},
         )
 
@@ -1483,7 +2769,7 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
             status="fallback",
             geometry=_prompt_geometry_fallback(payload.prompt_geometry, bbox, (width, height), payload.image_extent),
             confidence=0.2,
-            message="AI contour was rejected because it was worse than the student's draft. Returned the student's contour.",
+            message="AI-предложение отклонено: контур хуже черновика. Возвращен контур пользователя.",
             meta={
                 "backend": "classical-cv",
                 "fallback_from": AI_DIGITIZER_BACKEND if fallback_reason else None,
@@ -1498,7 +2784,7 @@ def segment_box(payload: SegmentBoxRequest) -> SegmentBoxResponse:
         status="passed",
         geometry=geometry,
         confidence=confidence,
-        message="AI contour generated from the student's prompt. Review and edit it before submitting.",
+        message="AI-предложение построено по подсказке. Проверьте и отредактируйте контур при необходимости.",
         meta={
             "backend": "classical-cv",
             "fallback_from": AI_DIGITIZER_BACKEND if fallback_reason else None,

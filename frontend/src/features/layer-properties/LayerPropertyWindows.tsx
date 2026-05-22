@@ -14,6 +14,7 @@ import {
 } from "../map/layerStyles";
 import type {
   ClassificationMethod,
+  GeoJsonPreview,
   LayerClassificationClass,
   LayerLegendMode,
   LayerPreviewState,
@@ -21,13 +22,34 @@ import type {
 } from "../map/layerStyles";
 
 type LayerPropertiesTab = "info" | "labels" | "style" | "classification";
+type DisplayGeometryKind = "point" | "line" | "polygon" | "mixed" | "unknown";
+
+const DISPLAY_GEOMETRY_KIND_LABELS: Record<DisplayGeometryKind, string> = {
+  point: "Точка",
+  line: "Линия",
+  polygon: "Полигон",
+  mixed: "Смешанный",
+  unknown: "Не определён",
+};
+
 function stringOrNull(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
 
+function effectiveGeometryKind(preview: GeoJsonPreview, style: LayerStyleSettings): DisplayGeometryKind {
+  return style.geometryKind ?? layerGeometryKind(preview);
+}
+
 function layerDisplayName(assetName: string) {
   return assetName.replace(/\.(zip|geojson|shp)$/i, "");
+}
+
+function formatDetectedFormat(format: string) {
+  if (format === "geojson") return "Слой карты";
+  if (format === "shapefile_zip") return "Архив слоёв";
+  if (format === "qgis_project") return "QGIS-проект";
+  return format.replace(/_/g, " ");
 }
 
 export function LayerPropertiesWindow(props: {
@@ -61,6 +83,7 @@ export function LayerPropertiesWindow(props: {
   const [classificationClassCount, setClassificationClassCount] = useState(props.layerStyle.classification?.classCount ?? 5);
   const [classificationScheme, setClassificationScheme] = useState(props.layerStyle.classification?.scheme ?? "yellowRed");
   const [classificationMethod, setClassificationMethod] = useState<ClassificationMethod>(props.layerStyle.classification?.method ?? "equal_interval");
+  const displayGeometryKind = effectiveGeometryKind(props.layer.preview, draftLayerStyle);
 
   useEffect(() => {
     setActiveTab("info");
@@ -166,7 +189,7 @@ export function LayerPropertiesWindow(props: {
         <>
           <dl className="layer-properties-dl">
             <dt>Формат</dt>
-            <dd>{props.layer.asset.detected_format}</dd>
+            <dd>{formatDetectedFormat(props.layer.asset.detected_format)}</dd>
             <dt>Система координат</dt>
             <dd>{props.layer.preview.crs}</dd>
             <dt>Исходная СК</dt>
@@ -228,6 +251,23 @@ export function LayerPropertiesWindow(props: {
       {activeTab === "style" ? (
         <div className="layer-style-editor">
           <label>
+            Тип слоя
+            <select
+              value={draftLayerStyle.geometryKind ?? ""}
+              onChange={(event) =>
+                updateDraftStyle({
+                  geometryKind: (event.target.value || null) as LayerStyleSettings["geometryKind"],
+                })
+              }
+            >
+              <option value="">Авто: {DISPLAY_GEOMETRY_KIND_LABELS[layerGeometryKind(props.layer.preview)]}</option>
+              <option value="point">Точка</option>
+              <option value="line">Линия</option>
+              <option value="polygon">Полигон</option>
+              <option value="mixed">Смешанный</option>
+            </select>
+          </label>
+          <label>
             Цвет обводки
             <input
               type="color"
@@ -280,7 +320,7 @@ export function LayerPropertiesWindow(props: {
       {activeTab === "classification" ? (
         <section className="layer-classification-editor standalone">
           <label>
-            Тип легенды
+            Тип классификации
             <select
               value={legendMode}
               onChange={(event) => {
@@ -359,7 +399,7 @@ export function LayerPropertiesWindow(props: {
           {draftLayerStyle.classification ? (
             <div className="classification-preview">
               <strong>
-                {LAYER_LEGEND_MODES[draftLayerStyle.classification.mode ?? "graduated_color"] ?? "Легенда"}:
+                {LAYER_LEGEND_MODES[draftLayerStyle.classification.mode ?? "graduated_color"] ?? "Классификация"}:
                 {" "}
                 {draftLayerStyle.classification.field}
               </strong>
@@ -369,7 +409,7 @@ export function LayerPropertiesWindow(props: {
                     className="classification-symbol-preview"
                   >
                     <LegendClassSymbol
-                      geometryKind={layerGeometryKind(props.layer.preview)}
+                      geometryKind={displayGeometryKind}
                       classItem={item}
                       color={item.color}
                       fillOpacity={item.fillOpacity}
@@ -400,7 +440,7 @@ export function LayerPropertiesWindow(props: {
                     <option value="dot">Точки</option>
                   </select>
                   <select
-                    value={legendSymbolType(layerGeometryKind(props.layer.preview), item)}
+                    value={legendSymbolType(displayGeometryKind, item)}
                     onChange={(event) => {
                       const preset = SYMBOL_PRESETS.find((candidate) => candidate.type === event.target.value);
                       if (!preset) {
@@ -411,7 +451,7 @@ export function LayerPropertiesWindow(props: {
                         lineStyle: preset.lineStyle,
                       });
                     }}
-                    title="РЈСЃР»РѕРІРЅС‹Р№ Р·РЅР°Рє"
+                    title="Условный знак"
                   >
                     {SYMBOL_PRESETS.map((preset) => (
                       <option key={preset.type} value={preset.type}>

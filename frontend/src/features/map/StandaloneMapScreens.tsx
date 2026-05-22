@@ -17,6 +17,7 @@ import type {
   ArchivePreviewResponse,
   AuthResponse,
   GeoJsonPreview,
+  LayerStyleManifest,
   QgisProjectMetadata,
   Submission,
   SubmissionAsset,
@@ -179,6 +180,7 @@ export function StandaloneAssignmentWorkspace(props: { assignmentId: number; aut
 export function StandaloneMapViewer(props: { submissionId: number }) {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [assets, setAssets] = useState<SubmissionAsset[]>([]);
+  const [styleManifest, setStyleManifest] = useState<LayerStyleManifest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(
@@ -221,12 +223,14 @@ export function StandaloneMapViewer(props: { submissionId: number }) {
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const [nextSubmission, nextAssets] = await Promise.all([
+        const [nextSubmission, nextAssets, nextStyleManifest] = await Promise.all([
           storedAuthFetchJson<Submission>(`/submissions/${props.submissionId}`),
           storedAuthFetchJson<SubmissionAsset[]>(`/submissions/${props.submissionId}/assets`),
+          storedAuthFetchJson<LayerStyleManifest | null>(`/submissions/${props.submissionId}/style-manifest`).catch(() => null),
         ]);
         setSubmission(nextSubmission);
         setAssets(nextAssets);
+        setStyleManifest(nextStyleManifest);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить слои сдачи.");
       } finally {
@@ -255,6 +259,7 @@ export function StandaloneMapViewer(props: { submissionId: number }) {
         selectedSubmissionId={props.submissionId}
         submissions={submission ? [submission] : []}
         assets={assets}
+        styleManifest={styleManifest}
         isLoading={isLoading}
         onSubmissionSelect={() => undefined}
         onFetchAssetPreview={fetchAssetPreview}

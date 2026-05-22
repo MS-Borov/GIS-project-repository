@@ -37,7 +37,9 @@ from app.services.submission_archive_parser import parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 from app.services.asset_validator import validate_asset_from_storage
 from app.services.geojson_preview import build_geojson_preview, parse_preview_bbox
-from app.services.qgis_project_parser import extract_qgis_project_metadata_from_archive
+from app.services.qgis_project_parser import (
+    extract_qgis_project_metadata_from_archive as parse_qgis_project_metadata_from_archive,
+)
 from app.services.target_asset_selector import choose_target_gis_asset
 from app.services.asset_requirement_evaluator import evaluate_asset_against_requirements
 
@@ -47,7 +49,95 @@ logger = logging.getLogger(__name__)
 LOCAL_SHAPEFILE_EXTENSIONS = {".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"}
 
 
-def _extract_style_manifest_from_archive(file_bytes: bytes) -> dict | None:
+def _safe_upload_filename(upload: UploadFile) -> str:
+    filename = Path(upload.filename or "").name.strip()
+    return filename or "submission-file.bin"
+
+
+def _unique_bundle_name(filename: str, used_names: set[str]) -> str:
+    candidate = Path(filename).name or "submission-file.bin"
+    if candidate not in used_names:
+        used_names.add(candidate)
+        return candidate
+
+    path = Path(candidate)
+    stem = path.stem or "submission-file"
+    suffix = path.suffix
+    index = 2
+    while True:
+        next_candidate = f"{stem}_{index}{suffix}"
+        if next_candidate not in used_names:
+            used_names.add(next_candidate)
+            return next_candidate
+        index += 1
+
+
+def _build_submission_bundle(uploaded_files: list[dict]) -> tuple[str, bytes, str]:
+    if len(uploaded_files) == 1:
+        item = uploaded_files[0]
+        return item["filename"], item["file_bytes"], item.get("content_type") or "application/octet-stream"
+
+    first_stem = Path(uploaded_files[0]["filename"]).stem[:80] or "submission"
+    bundle_filename = f"{first_stem}_and_{len(uploaded_files) - 1}_files.zip"
+    used_names: set[str] = set()
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        for item in uploaded_files:
+            bundle.writestr(_unique_bundle_name(item["filename"], used_names), item["file_bytes"])
+    return bundle_filename, buffer.getvalue(), "application/zip"
+
+
+def _read_submission_uploads(file: UploadFile | None, files: list[UploadFile] | None) -> list[dict]:
+    uploads = []
+    if file is not None and file.filename:
+        uploads.append(file)
+    if files:
+        uploads.extend(upload for upload in files if upload is not None and upload.filename)
+
+    uploaded_files = []
+    for upload in uploads:
+        filename = _safe_upload_filename(upload)
+        file_bytes = upload.file.read()
+        uploaded_files.append({
+            "filename": filename,
+            "content_type": upload.content_type,
+            "file_bytes": file_bytes,
+        })
+
+    return uploaded_files
+
+
+def _parsed_assets_from_uploaded_file(uploaded_file: dict) -> list[dict]:
+    filename = uploaded_file["filename"]
+    file_bytes = uploaded_file["file_bytes"]
+
+    if filename.lower().endswith(".zip"):
+        try:
+            parsed_assets = parse_submission_archive(file_bytes)
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail=f"ZIP archive '{filename}' is not valid.") from exc
+        for asset in parsed_assets:
+            if asset.get("asset_type") == "report" and not asset.get("group_key"):
+                asset["group_key"] = "archive_report"
+        return parsed_assets
+
+    validation = validate_submission_file(
+        filename=filename,
+        file_bytes=file_bytes,
+    )
+
+    return [{
+        "asset_name": filename,
+        "asset_type": _asset_type_from_detected_format(validation["detected_format"]),
+        "detected_format": validation["detected_format"],
+        "status": validation["status"],
+        "message": validation["message"],
+        "file_bytes": file_bytes,
+        "group_key": "uploaded_report" if _asset_type_from_detected_format(validation["detected_format"]) == "report" else None,
+    }]
+
+
+def _extract_style_manifest_from_archive(file_bytes: bytes, depth: int = 0) -> dict | None:
     try:
         with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as archive:
             manifest_name = next(
@@ -58,12 +148,91 @@ def _extract_style_manifest_from_archive(file_bytes: bytes) -> dict | None:
                 ),
                 None,
             )
-            if not manifest_name:
-                return None
-            manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
-            return manifest if isinstance(manifest, dict) else None
+            if manifest_name:
+                manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
+                return manifest if isinstance(manifest, dict) else None
+
+            if depth < 1:
+                nested_zip_names = [
+                    member.filename
+                    for member in archive.infolist()
+                    if not member.is_dir() and Path(member.filename).suffix.lower() == ".zip"
+                ]
+                for nested_name in nested_zip_names:
+                    nested_manifest = _extract_style_manifest_from_archive(
+                        archive.read(nested_name),
+                        depth=depth + 1,
+                    )
+                    if nested_manifest:
+                        return nested_manifest
     except Exception:
         return None
+
+    return None
+
+
+def _extract_qgis_project_metadata_from_archive(file_bytes: bytes, depth: int = 0) -> dict | None:
+    project = parse_qgis_project_metadata_from_archive(file_bytes)
+    if project:
+        return project
+
+    if depth >= 1:
+        return None
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as archive:
+            nested_zip_names = [
+                member.filename
+                for member in archive.infolist()
+                if not member.is_dir() and Path(member.filename).suffix.lower() == ".zip"
+            ]
+            for nested_name in nested_zip_names:
+                nested_project = _extract_qgis_project_metadata_from_archive(
+                    archive.read(nested_name),
+                    depth=depth + 1,
+                )
+                if nested_project:
+                    return nested_project
+    except Exception:
+        return None
+
+    return None
+
+
+def _style_manifest_from_qgis_project(project: dict | None) -> dict | None:
+    layers = []
+    for layer in (project or {}).get("layers") or []:
+        if not isinstance(layer, dict) or not layer.get("style"):
+            continue
+        source_basename = layer.get("source_basename")
+        layer_name = layer.get("name") or source_basename
+        if not layer_name and not source_basename:
+            continue
+        layers.append({
+            "source_layer_id": layer.get("id"),
+            "source_layer_name": layer_name,
+            "asset_name": f"{source_basename}.zip" if source_basename else None,
+            "export_stem": source_basename,
+            "alias": layer_name,
+            "group_name": None,
+            "style": layer.get("style"),
+        })
+
+    if not layers:
+        return None
+
+    return {
+        "version": 1,
+        "source": "qgis-project",
+        "layers": layers,
+    }
+
+
+def _extract_or_build_style_manifest(file_bytes: bytes) -> dict | None:
+    manifest = _extract_style_manifest_from_archive(file_bytes)
+    if manifest:
+        return manifest
+    return _style_manifest_from_qgis_project(_extract_qgis_project_metadata_from_archive(file_bytes))
 
 
 def _asset_type_from_detected_format(detected_format: str) -> str:
@@ -342,8 +511,8 @@ def preview_submission_archive_before_submit(
         raise HTTPException(status_code=400, detail="Предпросмотр до сдачи сейчас поддерживает ZIP-архивы.")
 
     parsed_assets = parse_submission_archive(file_bytes)
-    qgis_project = extract_qgis_project_metadata_from_archive(file_bytes)
-    style_manifest = _extract_style_manifest_from_archive(file_bytes)
+    qgis_project = _extract_qgis_project_metadata_from_archive(file_bytes)
+    style_manifest = _extract_or_build_style_manifest(file_bytes)
     assets = []
     layer_summaries = []
     warnings = []
@@ -475,7 +644,8 @@ def preview_temporary_archive_asset_geojson(
 def create_submission(
     request: Request,
     assignment_id: int = Form(...),
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
+    files: list[UploadFile] | None = File(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_student),
 ):
@@ -504,24 +674,27 @@ def create_submission(
         _ensure_student_can_submit_assignment(assignment, current_user, db)
 
         # Читаем файл целиком для проверки / парсинга
-        file_bytes = file.file.read()
-        file.file.seek(0)
+        uploaded_files = _read_submission_uploads(file=file, files=files)
+        if not uploaded_files:
+            raise HTTPException(status_code=400, detail="No submission files selected.")
+
+        bundle_filename, bundle_bytes, bundle_content_type = _build_submission_bundle(uploaded_files)
 
         # Сохраняем исходный файл submission в MinIO
         storage_key = upload_submission_file(
-            file_obj=file.file,
-            filename=file.filename,
-            content_type=file.content_type,
+            file_obj=io.BytesIO(bundle_bytes),
+            filename=bundle_filename,
+            content_type=bundle_content_type,
         )
 
         # Создаём запись Submission
         submission = Submission(
             assignment_id=assignment_id,
             student_id=current_user.id,
-            original_filename=file.filename,
+            original_filename=bundle_filename,
             storage_key=storage_key,
-            content_type=file.content_type,
-            size_bytes=len(file_bytes),
+            content_type=bundle_content_type,
+            size_bytes=len(bundle_bytes),
             status="uploaded",
         )
         db.add(submission)
@@ -533,68 +706,44 @@ def create_submission(
         # -------------------------------------------------
         # 1. ZIP SUBMISSION -> parse into multiple assets
         # -------------------------------------------------
-        if file.filename.lower().endswith(".zip"):
-            parsed_assets = parse_submission_archive(file_bytes)
+        parsed_assets = [
+            asset
+            for uploaded_file in uploaded_files
+            for asset in _parsed_assets_from_uploaded_file(uploaded_file)
+        ]
 
-            for asset in parsed_assets:
-                asset_storage_key = None
-                asset_bytes = asset.get("file_bytes")
+        for asset in parsed_assets:
+            asset_storage_key = None
+            asset_bytes = asset.get("file_bytes")
 
-                # Если parser реально вернул bytes asset-а,
-                # сохраняем этот asset отдельно в MinIO
-                if asset_bytes is not None:
-                    asset_storage_key = build_asset_storage_key(
-                        submission_id=submission.id,
-                        asset_name=asset["asset_name"],
-                    )
-                    upload_bytes(
-                        object_key=asset_storage_key,
-                        data=asset_bytes,
-                        content_type="application/octet-stream",
-                    )
-
-                db_asset = SubmissionAsset(
+            if asset_bytes is not None:
+                asset_storage_key = build_asset_storage_key(
                     submission_id=submission.id,
                     asset_name=asset["asset_name"],
-                    asset_type=asset["asset_type"],
-                    detected_format=asset["detected_format"],
-                    status=asset["status"],
-                    message=asset["message"],
-                    storage_key=asset_storage_key,
-                    group_key=asset.get("group_key"),
                 )
-                db.add(db_asset)
-                created_assets.append(db_asset)
-
-            db.commit()
-
-            for db_asset in created_assets:
-                db.refresh(db_asset)
-
-        # -------------------------------------------------
-        # 2. SINGLE FILE SUBMISSION -> create one asset
-        # -------------------------------------------------
-        else:
-            validation = validate_submission_file(
-                filename=file.filename,
-                file_bytes=file_bytes,
-            )
+                upload_bytes(
+                    object_key=asset_storage_key,
+                    data=asset_bytes,
+                    content_type="application/octet-stream",
+                )
 
             db_asset = SubmissionAsset(
                 submission_id=submission.id,
-                asset_name=file.filename,
-                asset_type=_asset_type_from_detected_format(validation["detected_format"]),
-                detected_format=validation["detected_format"],
-                status=validation["status"],
-                message=validation["message"],
-                storage_key=submission.storage_key,
-                group_key=None,
+                asset_name=asset["asset_name"],
+                asset_type=asset["asset_type"],
+                detected_format=asset["detected_format"],
+                status=asset["status"],
+                message=asset["message"],
+                storage_key=asset_storage_key,
+                group_key=asset.get("group_key"),
             )
             db.add(db_asset)
-            db.commit()
-            db.refresh(db_asset)
-
             created_assets.append(db_asset)
+
+        db.commit()
+
+        for db_asset in created_assets:
+            db.refresh(db_asset)
 
         # -------------------------------------------------
         # 3. TECHNICAL CHECKS PER ASSET
@@ -893,3 +1042,25 @@ def list_submission_checks(
         .all()
     )
     return checks
+
+
+@router.get("/{submission_id}/style-manifest")
+def get_submission_style_manifest(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    ensure_submission_access(submission, current_user)
+
+    if not submission.original_filename.lower().endswith(".zip"):
+        return None
+
+    try:
+        file_bytes = _load_asset_bytes(submission.storage_key)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Submission archive object not found: {exc}") from exc
+
+    return _extract_or_build_style_manifest(file_bytes)

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps.auth import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import TokenRead, UserCreate, UserLogin, UserRead, UserRegister
+from app.schemas.user import TokenRead, UserCreate, UserLogin, UserRead, UserRegister, UserUpdate
 from app.services.auth import create_access_token, hash_password, normalize_email, verify_password
 from app.services.rate_limit import build_rate_limit_key, enforce_rate_limit, get_client_ip
 
@@ -104,6 +104,27 @@ def login_user(
 
 @router.get("/me", response_model=UserRead)
 def read_current_user(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me", response_model=UserRead)
+def update_current_user(
+    payload: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if payload.email is not None:
+        email = normalize_email(payload.email)
+        existing_user = db.query(User).filter(User.email == email, User.id != current_user.id).first()
+        if existing_user:
+            raise HTTPException(status_code=409, detail="User already exists")
+        current_user.email = email
+
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip() or None
+
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 
