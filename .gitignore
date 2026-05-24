@@ -1,6 +1,11 @@
 .venv
 .relay-venv
-*.jpg
+
+datasets/
+models/
+experiments/
+
+frontend/node_modules/
 
 # Environment files
 .env
@@ -23,6 +28,5 @@ cmd/server/server
 *.db
 *.sqlite
 
-datasets/
-models/
-experiments/ritm/gis/
+# Local DB backups (managed by postgres-backup service)
+/backups/

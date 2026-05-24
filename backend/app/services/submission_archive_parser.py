@@ -2,6 +2,34 @@ import io
 import zipfile
 from pathlib import Path
 
+from app.core.config import settings
+
+
+class ArchiveTooLargeError(Exception):
+    """Распакованный размер архива превышает лимит. Защита от ZIP-bomb."""
+
+
+def _check_archive_safety(archive: zipfile.ZipFile, max_total_bytes: int) -> None:
+    """Перед чтением проверяет, что суммарный распакованный размер всех членов
+    архива не превышает лимит. Защита от ZIP-bomb (100 KB архив -> 10 GB).
+    """
+    total = 0
+    for member in archive.infolist():
+        if member.is_dir():
+            continue
+        # file_size — uncompressed
+        if member.file_size > max_total_bytes:
+            raise ArchiveTooLargeError(
+                f"Файл '{member.filename}' внутри архива слишком большой: "
+                f"{member.file_size} байт, лимит {max_total_bytes}."
+            )
+        total += member.file_size
+        if total > max_total_bytes:
+            raise ArchiveTooLargeError(
+                f"Суммарный распакованный размер архива превышает {max_total_bytes} байт. "
+                f"Возможна попытка ZIP-bomb атаки."
+            )
+
 
 SHAPEFILE_EXTENSIONS = {".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"}
 REPORT_EXTENSIONS = {".doc", ".docx", ".txt"}
@@ -90,9 +118,10 @@ def parse_submission_archive(file_bytes: bytes) -> list[dict]:
     result: list[dict] = []
 
     with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as archive:
+        _check_archive_safety(archive, settings.max_archive_uncompressed_bytes)
         members = [m for m in archive.infolist() if not m.is_dir()]
 
-        # Читаем все файлы архива в память.
+        # Читаем все файлы архива в память (после проверки на ZIP-bomb).
         all_files: dict[str, bytes] = {}
         for member in members:
             # Сразу пропускаем служебные metadata/lock-файлы.

@@ -1,4 +1,3 @@
-
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -19,6 +18,42 @@ services:
       timeout: 5s
       retries: 5
 
+
+  postgres-backup:
+    image: postgres:16-alpine
+    container_name: gis_platform_db_backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${POSTGRES_DB:-gis_platform}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-6}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mkdir -p /backups
+        while true; do
+          ts=$$(date +%Y%m%d_%H%M%S)
+          file="/backups/db_$$ts.dump"
+          echo "[backup] $$ts: starting pg_dump -> $$file"
+          if pg_dump --no-owner --no-acl --format=custom --file="$$file"; then
+            echo "[backup] $$ts: ok ($$(du -h "$$file" | cut -f1))"
+            find /backups -name "db_*.dump" -type f -mtime +$${BACKUP_RETENTION_DAYS} -delete
+          else
+            echo "[backup] $$ts: FAILED" >&2
+            rm -f "$$file"
+          fi
+          sleep $$((BACKUP_INTERVAL_HOURS * 3600))
+        done
 
   redis:
     image: redis:7-alpine
@@ -89,7 +124,7 @@ services:
       - ./backend:/app
       - backend_uploads:/app/uploads
     command: >
-      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 ${UVICORN_EXTRA_ARGS:---reload}"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
       interval: 10s
@@ -211,8 +246,3 @@ volumes:
   redis_data:
   minio_data:
   backend_uploads:
-
-
-
-
-      

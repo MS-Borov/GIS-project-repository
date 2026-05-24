@@ -255,8 +255,8 @@ function storedUserRole(): UserRole | null {
     return null;
   }
   try {
-    const parsed = JSON.parse(savedAuth) as AuthResponse;
-    return parsed.user.role;
+    const parsed = JSON.parse(savedAuth) as Partial<AuthResponse>;
+    return parsed?.user?.role ?? null;
   } catch {
     return null;
   }
@@ -629,6 +629,11 @@ export function MultiLayerMapPanel(props: {
     message: string;
   } | null>(null);
   const aiSuggestionRef = useRef<typeof aiSuggestion>(null);
+  const [lastAiRequest, setLastAiRequest] = useState<
+    | { kind: "box"; boxFeature: Feature<Geometry> }
+    | { kind: "continue"; targetFeature: Feature<Geometry> }
+    | null
+  >(null);
   const [isDraftPropertiesOpen, setIsDraftPropertiesOpen] = useState(false);
   const [isDraftTableOpen, setIsDraftTableOpen] = useState(false);
   const [selectedFeatureKeys, setSelectedFeatureKeys] = useState<Set<string>>(new Set());
@@ -854,6 +859,7 @@ export function MultiLayerMapPanel(props: {
     const targetFeature = aiSuggestionRef.current?.targetFeature;
     aiSuggestionSourceRef.current.clear();
     setAiSuggestion(null);
+    setLastAiRequest(null);
     targetFeature?.changed();
     draftLayerRef.current?.changed();
   }
@@ -1146,6 +1152,8 @@ export function MultiLayerMapPanel(props: {
       return;
     }
 
+    const previousEditMode = editModeRef.current;
+    setLastAiRequest({ kind: "box", boxFeature });
     setIsAiSegmenting(true);
     setDraftStatus("AI-контур: отправляю фрагмент карты в сервис...");
     try {
@@ -1195,7 +1203,7 @@ export function MultiLayerMapPanel(props: {
       setDraftStatus(error instanceof Error ? `AI-контур: ${error.message}` : "AI-контур не удалось построить.");
     } finally {
       setIsAiSegmenting(false);
-      setEditMode("select");
+      setEditMode(previousEditMode);
     }
   }
 
@@ -1271,6 +1279,8 @@ export function MultiLayerMapPanel(props: {
       return;
     }
 
+    const previousEditMode = editModeRef.current;
+    setLastAiRequest({ kind: "continue", targetFeature: selectedFeature });
     setIsAiSegmenting(true);
     setDraftStatus("AI-продолжение: анализирую выбранный объект...");
     try {
@@ -1333,7 +1343,20 @@ export function MultiLayerMapPanel(props: {
       setDraftStatus(error instanceof Error ? `AI-продолжение: ${error.message}` : "AI-продолжение не удалось построить.");
     } finally {
       setIsAiSegmenting(false);
-      setEditMode("select");
+      setEditMode(previousEditMode);
+    }
+  }
+
+  async function regenerateAiSuggestion() {
+    if (!lastAiRequest || isAiSegmenting) {
+      return;
+    }
+    setDraftStatus("AI: запрашиваю новый вариант...");
+    if (lastAiRequest.kind === "box") {
+      await requestAiSegmentBox(lastAiRequest.boxFeature);
+    } else {
+      selectedDraftFeatureRef.current = lastAiRequest.targetFeature;
+      await continueSelectedDraftFeatureWithAi();
     }
   }
 
@@ -2674,9 +2697,16 @@ export function MultiLayerMapPanel(props: {
             <span>{Math.round(aiSuggestion.confidence * 100)}% · {aiSuggestion.message}</span>
           </div>
           <div>
-            <button onClick={acceptAiSuggestion}>Принять</button>
-            <button onClick={addAiSuggestionAsNewFeature}>Добавить как новый</button>
-            <button onClick={rejectAiSuggestion}>Отклонить</button>
+            <button onClick={acceptAiSuggestion} disabled={isAiSegmenting}>Принять</button>
+            <button onClick={addAiSuggestionAsNewFeature} disabled={isAiSegmenting}>Добавить как новый</button>
+            <button
+              onClick={() => void regenerateAiSuggestion()}
+              disabled={isAiSegmenting || !lastAiRequest}
+              title="Запросить новый вариант от AI с тем же исходным контуром / рамкой"
+            >
+              {isAiSegmenting ? "Перерисовываю..." : "Перерисовать AI"}
+            </button>
+            <button onClick={rejectAiSuggestion} disabled={isAiSegmenting}>Отклонить</button>
           </div>
         </div>
       ) : null}

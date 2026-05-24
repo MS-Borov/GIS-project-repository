@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
-from app.api.deps.auth import require_teacher
+from app.api.deps.auth import ensure_teacher_can_access_assignment, require_teacher
 from app.db.session import get_db
 from app.models.assignment import Assignment
 from app.models.assignment_requirements import AssignmentRequirements
@@ -27,8 +27,9 @@ router = APIRouter(prefix="/assignments", tags=["assignment-requirements"])
 def get_assignment_requirements(
     assignment_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher),
+    current_user: User = Depends(require_teacher),
 ):
+    ensure_teacher_can_access_assignment(db, current_user, assignment_id)
     requirements = (
         db.query(AssignmentRequirements)
         .filter(AssignmentRequirements.assignment_id == assignment_id)
@@ -49,11 +50,9 @@ def upsert_assignment_requirements(
     assignment_id: int,
     payload: AssignmentRequirementsUpsert,
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher),
+    current_user: User = Depends(require_teacher),
 ):
-    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    assignment = ensure_teacher_can_access_assignment(db, current_user, assignment_id)
 
     requirements = (
         db.query(AssignmentRequirements)
@@ -97,11 +96,9 @@ def patch_assignment_requirements(
     assignment_id: int,
     payload: AssignmentRequirementsPatch,
     db: Session = Depends(get_db),
-    _: User = Depends(require_teacher),
+    current_user: User = Depends(require_teacher),
 ):
-    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    assignment = ensure_teacher_can_access_assignment(db, current_user, assignment_id)
 
     requirements = (
         db.query(AssignmentRequirements)
@@ -156,9 +153,7 @@ def extract_assignment_requirements_from_text(
         window_seconds=600,
     )
 
-    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    assignment = ensure_teacher_can_access_assignment(db, current_user, assignment_id)
 
     extracted = extract_requirements_from_text(
         text=payload.source_text,
@@ -199,9 +194,7 @@ def extract_assignment_requirements_from_file(
     загружается файл задания, система извлекает текст
     и создаёт draft requirements, включая expected_outputs_json.
     """
-    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    assignment = ensure_teacher_can_access_assignment(db, current_user, assignment_id)
 
     enforce_rate_limit(
         build_rate_limit_key("requirements-extract-file", get_client_ip(request), str(current_user.id)),
@@ -209,7 +202,9 @@ def extract_assignment_requirements_from_file(
         window_seconds=600,
     )
 
-    file_bytes = file.file.read()
+    from app.core.config import settings
+    from app.services.storage import read_upload_bounded
+    file_bytes = read_upload_bounded(file, settings.max_document_upload_bytes)
 
     document = extract_document_text(
         filename=file.filename,

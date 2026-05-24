@@ -32,7 +32,7 @@ from app.services.asset_validator import validate_asset_from_storage
 from app.services.expected_output_evaluator import evaluate_asset_against_expected_output
 from app.services.multi_layer_requirement_matcher import match_assets_to_expected_outputs
 from app.services.multi_layer_summary_builder import build_multi_layer_summary
-from app.services.submission_archive_parser import parse_submission_archive
+from app.services.submission_archive_parser import ArchiveTooLargeError, parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 from app.services.storage import (
     build_asset_storage_key,
@@ -773,7 +773,11 @@ def submit_map_draft(
     db.flush()
 
     created_assets: list[SubmissionAsset] = []
-    for parsed_asset in parse_submission_archive(data):
+    try:
+        parsed_iter = parse_submission_archive(data)
+    except ArchiveTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    for parsed_asset in parsed_iter:
         asset_bytes = parsed_asset.get("file_bytes")
         asset_storage_key = None
         if asset_bytes is not None:

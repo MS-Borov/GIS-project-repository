@@ -4,6 +4,7 @@ import zipfile
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
+from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import settings
 
@@ -70,6 +71,77 @@ def upload_bytes(object_key: str, data: bytes, content_type: str | None = None) 
         ExtraArgs=extra_args,
     )
     return object_key
+
+
+def upload_fileobj_stream(
+    object_key: str,
+    file_obj,
+    content_type: str | None = None,
+) -> str:
+    """Стримит file-like объект в S3 чанками (boto3 делает multipart автоматически
+    для больших файлов). Использовать когда не нужно держать всё содержимое в памяти.
+
+    Подходит для прямой загрузки UploadFile (FastAPI) → S3, без `.read()` целиком.
+    """
+    client = get_s3_client()
+    bucket_name = settings.s3_bucket_name
+
+    ensure_bucket_exists(bucket_name)
+
+    extra_args = {}
+    if content_type:
+        extra_args["ContentType"] = content_type
+
+    # Если caller уже что-то прочитал — отматываем в начало
+    if hasattr(file_obj, "seek"):
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
+
+    client.upload_fileobj(
+        file_obj,
+        bucket_name,
+        object_key,
+        ExtraArgs=extra_args,
+    )
+    return object_key
+
+
+def enforce_upload_size_limit(file: UploadFile, max_bytes: int) -> None:
+    """Если Content-Length известен, сразу проверяем. Если нет — рассчитываем
+    на nginx client_max_body_size и на чтение с лимитом ниже по стеку.
+    """
+    size = getattr(file, "size", None)
+    if size is not None and size > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"Файл слишком большой: {size} байт, "
+                f"лимит {max_bytes} байт ({max_bytes // (1024 * 1024)} MB)."
+            ),
+        )
+
+
+def read_upload_bounded(file: UploadFile, max_bytes: int) -> bytes:
+    """Читает upload в память с жёстким верхним лимитом. Кидает 413 если
+    превышен лимит, не успев положить файл в память целиком.
+    """
+    enforce_upload_size_limit(file, max_bytes)
+    try:
+        file.file.seek(0)
+    except Exception:
+        pass
+    data = file.file.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"Файл превышает лимит {max_bytes} байт "
+                f"({max_bytes // (1024 * 1024)} MB)."
+            ),
+        )
+    return data
 
 def build_asset_storage_key(submission_id: int, asset_name: str) -> str:
     safe_name = asset_name.replace("\\", "_").replace("/", "_").replace(" ", "_")

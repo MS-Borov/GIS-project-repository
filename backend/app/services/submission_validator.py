@@ -7,6 +7,41 @@ from pathlib import Path
 import geopandas as gpd
 import olefile
 
+from app.core.config import settings
+
+
+def _safe_extractall(archive: zipfile.ZipFile, target_dir: str, max_total_bytes: int) -> None:
+    """Распаковывает ZIP с защитой от ZIP-bomb и path traversal.
+
+    Заменяет небезопасный archive.extractall(target_dir):
+    - Проверяет суммарный распакованный размер
+    - Защищается от path traversal (имена ../ или абсолютные пути)
+    """
+    target_root = Path(target_dir).resolve()
+    total = 0
+    for member in archive.infolist():
+        if member.is_dir():
+            continue
+        if member.file_size > max_total_bytes:
+            raise ValueError(
+                f"Файл '{member.filename}' внутри архива слишком большой: "
+                f"{member.file_size} байт."
+            )
+        total += member.file_size
+        if total > max_total_bytes:
+            raise ValueError(
+                f"Распакованный размер архива превышает {max_total_bytes} байт. "
+                f"Возможна ZIP-bomb атака."
+            )
+        # Защита от path traversal: распакованный путь должен быть внутри target_dir
+        member_path = (target_root / member.filename).resolve()
+        if not str(member_path).startswith(str(target_root)):
+            raise ValueError(
+                f"Файл '{member.filename}' имеет путь вне директории извлечения "
+                f"(возможна path traversal атака)."
+            )
+        archive.extract(member, target_dir)
+
 
 # Поддерживаемые расширения submission.
 # Для shapefile принимаем .zip, потому что shapefile — это набор файлов, а не один файл.
@@ -300,7 +335,15 @@ def _validate_shapefile_zip(file_bytes: bytes) -> dict:
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
-            archive.extractall(tmp_dir)
+            try:
+                _safe_extractall(archive, tmp_dir, settings.max_archive_uncompressed_bytes)
+            except ValueError as exc:
+                return _build_result(
+                    "failed",
+                    ".zip",
+                    "shapefile_zip",
+                    str(exc),
+                )
 
         shp_path = None
         for path in _find_shp_files(Path(tmp_dir)):

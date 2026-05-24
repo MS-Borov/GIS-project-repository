@@ -11,6 +11,8 @@ import { LayerWorkspace } from "../features/map/LayerWorkspace";
 import { MAP_COORDINATE_PROJECTIONS } from "../features/map/mapWorkspaceUtils";
 import type { LayerStyleManifest } from "../features/map/mapWorkspaceUtils";
 import { StandaloneArchivePreview, StandaloneAssignmentWorkspace, StandaloneMapViewer } from "../features/map/StandaloneMapScreens";
+import { ReportPreviewModal } from "../features/report-preview/ReportPreviewModal";
+import type { ReportPreviewSource } from "../features/report-preview/ReportPreviewModal";
 import { UserProfileMenu } from "../features/profile/UserProfileMenu";
 
 type UserRole = "admin" | "teacher" | "student";
@@ -42,6 +44,7 @@ type User = {
   full_name?: string | null;
   role: UserRole;
   is_active: boolean;
+  email_verified?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -50,6 +53,13 @@ type AuthResponse = {
   access_token: string;
   token_type: string;
   user: User;
+};
+
+type RegisterResponse = Partial<AuthResponse> & {
+  verification_required?: boolean;
+  email?: string | null;
+  message?: string | null;
+  dev_code?: string | null;
 };
 
 type Assignment = {
@@ -220,6 +230,7 @@ const API_BASE_URL =
 
 const AUTH_STORAGE_KEY = "gis_edu_auth";
 const THEME_STORAGE_KEY = "gis_edu_theme";
+const RESEND_COOLDOWN_SECONDS = 60;
 const ARCHIVE_PREVIEW_STORAGE_PREFIX = "gis_edu_archive_preview:";
 const RUSSIA_PREVIEW_BBOX = "19,41,180,82";
 const RUSSIA_PREVIEW_QUERY = `bbox=${encodeURIComponent(RUSSIA_PREVIEW_BBOX)}&clip_boundary=russia`;
@@ -278,6 +289,8 @@ function formatDetectedFormat(format: string) {
   if (format === "geojson") return "Слой карты";
   if (format === "shapefile_zip") return "Архив слоёв";
   if (format === "qgis_project") return "QGIS-проект";
+  if (format === "docx") return "Документ DOCX";
+  if (format === "pdf") return "Документ PDF";
   return format.replace(/_/g, " ");
 }
 
@@ -306,6 +319,26 @@ function archivePreviewUrl(previewKey: string) {
   return url.toString();
 }
 
+async function downloadAuthorizedFile(path: string, suggestedFilename: string) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: storedAuthHeaders(),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${path} вернул ${response.status}: ${text}`);
+  }
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = suggestedFilename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+}
+
+
 function storedAuthHeaders(): HeadersInit {
   const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
   if (!savedAuth) {
@@ -325,8 +358,8 @@ function storedUserRole(): UserRole | null {
     return null;
   }
   try {
-    const parsed = JSON.parse(savedAuth) as AuthResponse;
-    return parsed.user.role;
+    const parsed = JSON.parse(savedAuth) as Partial<AuthResponse>;
+    return parsed?.user?.role ?? null;
   } catch {
     return null;
   }
@@ -429,6 +462,10 @@ function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authFullName, setAuthFullName] = useState("");
+  const [authVerificationEmail, setAuthVerificationEmail] = useState<string | null>(null);
+  const [authVerificationCode, setAuthVerificationCode] = useState("");
+  const [authResendCooldownSeconds, setAuthResendCooldownSeconds] = useState(0);
+  const [reportPreviewSource, setReportPreviewSource] = useState<ReportPreviewSource | null>(null);
   const [authMessage, setAuthMessage] = useState("Войдите, чтобы открыть рабочее пространство.");
   const [activeTab, setActiveTab] = useState<CourseTab>("stream");
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
@@ -487,6 +524,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (authResendCooldownSeconds <= 0) {
+      return;
+    }
+    const timerId = window.setTimeout(() => {
+      setAuthResendCooldownSeconds((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearTimeout(timerId);
+  }, [authResendCooldownSeconds]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
@@ -498,7 +545,11 @@ function App() {
     }
 
     try {
-      const parsed = JSON.parse(savedAuth) as AuthResponse;
+      const parsed = JSON.parse(savedAuth) as Partial<AuthResponse>;
+      if (!parsed?.access_token || !parsed?.user?.role) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        return;
+      }
       setAuthToken(parsed.access_token);
       setCurrentUser(parsed.user);
       setAuthMessage(`Вы вошли как ${roleLabel(parsed.user.role)}.`);
@@ -540,6 +591,9 @@ function App() {
     setAuthToken(data.access_token);
     setCurrentUser(data.user);
     setActiveTab("stream");
+    setAuthVerificationEmail(null);
+    setAuthVerificationCode("");
+    setAuthResendCooldownSeconds(0);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
     setAuthMessage(`Вы вошли как ${roleLabel(data.user.role)}.`);
     void loadCourses(data.access_token);
@@ -562,7 +616,7 @@ function App() {
               role: "student",
             };
 
-      const data = await fetchJson<AuthResponse>(
+      const data = await fetchJson<RegisterResponse>(
         `/auth/${authMode}`,
         {
           method: "POST",
@@ -571,10 +625,22 @@ function App() {
         },
         null,
       );
-      persistAuth(data);
+      if (data.access_token && data.user) {
+        persistAuth(data as AuthResponse);
+      } else if (data.verification_required) {
+        const email = data.email ?? authEmail.trim();
+        setAuthVerificationEmail(email);
+        setAuthVerificationCode(data.dev_code ?? "");
+        setAuthResendCooldownSeconds(RESEND_COOLDOWN_SECONDS);
+        setAuthMessage(`Код подтверждения отправлен на ${email}.`);
+      } else {
+        throw new Error(data.message ?? "Регистрация не завершена.");
+      }
       setAuthPassword("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось выполнить вход.");
+      const message = error instanceof Error ? error.message : "Не удалось выполнить вход.";
+      applyCooldownFromErrorMessage(message);
+      setErrorMessage(message);
     } finally {
       setIsLoading(false);
     }
@@ -604,6 +670,80 @@ function App() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось проверить сессию.");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function submitEmailVerification() {
+    const email = authVerificationEmail ?? authEmail.trim();
+    if (!email || !authVerificationCode.trim()) {
+      setErrorMessage("Введите email и код подтверждения.");
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const data = await fetchJson<AuthResponse>(
+        "/auth/verify-email",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, code: authVerificationCode.trim() }),
+        },
+        null,
+      );
+      persistAuth(data);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось подтвердить почту.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function resendEmailVerification() {
+    const email = authVerificationEmail ?? authEmail.trim();
+    if (!email) {
+      setErrorMessage("Введите email для повторной отправки кода.");
+      return;
+    }
+    if (authResendCooldownSeconds > 0) {
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const data = await fetchJson<RegisterResponse>(
+        "/auth/resend-verification",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+        null,
+      );
+      setAuthVerificationEmail(email);
+      setAuthVerificationCode(data.dev_code ?? "");
+      setAuthResendCooldownSeconds(RESEND_COOLDOWN_SECONDS);
+      setAuthMessage(`Новый код отправлен на ${email}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось отправить код повторно.";
+      applyCooldownFromErrorMessage(message);
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function applyCooldownFromErrorMessage(message: string) {
+    const match = message.match(/(\d+)\s*seconds/i);
+    if (match) {
+      const seconds = Number.parseInt(match[1], 10);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        setAuthResendCooldownSeconds(seconds);
+      }
     }
   }
 
@@ -651,6 +791,9 @@ function App() {
     setSelectedAssignmentId(null);
     setSelectedSubmissionId(null);
     setCourseMembers([]);
+    setAuthVerificationEmail(null);
+    setAuthVerificationCode("");
+    setAuthResendCooldownSeconds(0);
     localStorage.removeItem(AUTH_STORAGE_KEY);
     setAuthMessage("Вы вышли из системы.");
   }
@@ -1221,12 +1364,23 @@ function App() {
             authEmail={authEmail}
             authPassword={authPassword}
             authFullName={authFullName}
+            authVerificationEmail={authVerificationEmail}
+            authVerificationCode={authVerificationCode}
+            authResendCooldownSeconds={authResendCooldownSeconds}
             isLoading={isLoading}
-            onModeChange={setAuthMode}
+            onModeChange={(mode) => {
+              setAuthMode(mode);
+              setAuthVerificationEmail(null);
+              setAuthVerificationCode("");
+              setAuthResendCooldownSeconds(0);
+            }}
             onEmailChange={setAuthEmail}
             onPasswordChange={setAuthPassword}
             onFullNameChange={setAuthFullName}
+            onVerificationCodeChange={setAuthVerificationCode}
             onSubmit={() => void submitAuthForm()}
+            onVerifyEmail={() => void submitEmailVerification()}
+            onResendVerification={() => void resendEmailVerification()}
           />
         </>
       ) : (
@@ -1346,6 +1500,7 @@ function App() {
                   setActiveTab("submissions");
                   setStatusMessage(`Черновик сдан как работа #${submission.id}.`);
                 }}
+                onPreviewReport={setReportPreviewSource}
               />
             ) : null}
 
@@ -1387,11 +1542,16 @@ function App() {
                 onLoadAssetPreview={(id) => void loadAssetGeojsonPreview(id)}
                 onFetchAssetPreview={fetchAssetGeojsonPreview}
                 onMapFeatureSelect={setSelectedMapFeatureIndex}
+                onPreviewReport={setReportPreviewSource}
               />
             ) : null}
           </div>
         </section>
       )}
+      <ReportPreviewModal
+        source={reportPreviewSource}
+        onClose={() => setReportPreviewSource(null)}
+      />
     </main>
   );
 }
@@ -1591,13 +1751,27 @@ function AuthPanel(props: {
   authEmail: string;
   authPassword: string;
   authFullName: string;
+  authVerificationEmail: string | null;
+  authVerificationCode: string;
+  authResendCooldownSeconds: number;
   isLoading: boolean;
   onModeChange: (mode: AuthMode) => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onFullNameChange: (value: string) => void;
+  onVerificationCodeChange: (value: string) => void;
   onSubmit: () => void;
+  onVerifyEmail: () => void;
+  onResendVerification: () => void;
 }) {
+  const verificationEmail = props.authVerificationEmail ?? props.authEmail;
+  const resendDisabled =
+    props.isLoading || !verificationEmail || props.authResendCooldownSeconds > 0;
+  const resendLabel =
+    props.authResendCooldownSeconds > 0
+      ? `Отправить ещё раз (${props.authResendCooldownSeconds} с)`
+      : "Отправить ещё раз";
+
   return (
     <section className="auth-layout">
       <div className="auth-panel">
@@ -1656,8 +1830,31 @@ function AuthPanel(props: {
           {props.authMode === "login" ? "Войти" : "Создать аккаунт студента"}
         </button>
 
+        {props.authVerificationEmail ? (
+          <div className="verification-box">
+            <label>
+              Код из письма
+              <input
+                inputMode="numeric"
+                value={props.authVerificationCode}
+                onChange={(event) => props.onVerificationCodeChange(event.target.value)}
+                autoComplete="one-time-code"
+                placeholder="000000"
+              />
+            </label>
+            <div className="verification-actions">
+              <button className="primary" onClick={props.onVerifyEmail} disabled={props.isLoading}>
+                Подтвердить почту
+              </button>
+              <button onClick={props.onResendVerification} disabled={resendDisabled}>
+                {resendLabel}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <p className="auth-note">
-          Публичная регистрация создаёт только студента. Преподавателя и администратора создаёт admin.
+          Публичная регистрация создаёт только студента. Если включена проверка почты, код вводится один раз после регистрации.
         </p>
       </div>
     </section>
@@ -1723,6 +1920,7 @@ function TeacherWorkspace(props: {
   onFetchAssetPreview: (assetId: number) => Promise<GeoJsonPreview>;
   onMapFeatureSelect: (index: number | null) => void;
   onDraftSubmitted: (submission: Submission) => void | Promise<void>;
+  onPreviewReport: (source: ReportPreviewSource) => void;
 }) {
   return (
     <section className="workspace-grid">
@@ -1788,7 +1986,12 @@ function TeacherWorkspace(props: {
         ) : null}
 
         {props.activeTab === "submissions" && props.selectedAssignmentId ? (
-          <SubmissionPanel {...props} mode="teacher" onRefresh={props.onLoadSubmissions} />
+          <SubmissionPanel
+            {...props}
+            mode="teacher"
+            onRefresh={props.onLoadSubmissions}
+            onPreviewReport={(asset) => props.onPreviewReport({ kind: "asset", assetId: asset.id, name: asset.asset_name })}
+          />
         ) : null}
 
         {props.activeTab === "layers" && props.selectedAssignmentId ? (
@@ -1852,6 +2055,7 @@ function StudentWorkspace(props: {
   onFetchAssetPreview: (assetId: number) => Promise<GeoJsonPreview>;
   onMapFeatureSelect: (index: number | null) => void;
   onDraftSubmitted?: (submission: Submission) => void | Promise<void>;
+  onPreviewReport: (source: ReportPreviewSource) => void;
 }) {
   return (
     <section className="workspace-grid">
@@ -1894,6 +2098,7 @@ function StudentWorkspace(props: {
                 </div>
               </div>
               {props.selectedAssignment?.description ? <p className="muted">{props.selectedAssignment.description}</p> : null}
+              {props.selectedAssignment ? <StudentAssignmentMaterialsBox assignment={props.selectedAssignment} /> : null}
               {props.selectedAssignmentId ? (
                 <div className="upload-row">
                   <label>
@@ -1918,6 +2123,16 @@ function StudentWorkspace(props: {
                   <button onClick={props.onPreviewSubmissionArchive} disabled={props.isLoading || !props.submissionFileIsArchive}>
                     Проверить на карте
                   </button>
+                  <button
+                    onClick={() => {
+                      if (props.submissionReportFile) {
+                        props.onPreviewReport({ kind: "file", file: props.submissionReportFile });
+                      }
+                    }}
+                    disabled={props.isLoading || !props.submissionReportFile}
+                  >
+                    Просмотреть отчёт
+                  </button>
                   {props.hasSubmissionFile ? (
                     <div className="muted">
                       Выбрано: {[props.submissionArchiveFile?.name, props.submissionReportFile?.name].filter(Boolean).join(", ")}
@@ -1930,7 +2145,11 @@ function StudentWorkspace(props: {
         ) : null}
 
         {props.activeTab === "submissions" ? (
-          <SubmissionPanel {...props} mode="student" />
+          <SubmissionPanel
+            {...props}
+            mode="student"
+            onPreviewReport={(asset) => props.onPreviewReport({ kind: "asset", assetId: asset.id, name: asset.asset_name })}
+          />
         ) : null}
 
         {props.activeTab === "layers" ? (
@@ -1950,9 +2169,61 @@ function StudentWorkspace(props: {
   );
 }
 
+function AssignmentMaterialsList(props: {
+  materials: AssignmentMaterial[];
+  emptyMessage?: string;
+}) {
+  if (props.materials.length === 0) {
+    return <p className="muted">{props.emptyMessage ?? "Материалов пока нет."}</p>;
+  }
+  return (
+    <div className="materials-list-compact">
+      {props.materials.map((material) => (
+        <div key={material.id} className="material-row-compact">
+          <div className="material-row-info">
+            <strong title={material.material_name}>{layerDisplayName(material.material_name)}</strong>
+            <span>
+              {formatDetectedFormat(material.detected_format)} · {statusLabel(material.status)}
+            </span>
+          </div>
+          {material.download_url ? (
+            <button
+              className="icon-button"
+              title={`Скачать ${material.material_name}`}
+              aria-label={`Скачать ${material.material_name}`}
+              onClick={() => {
+                void downloadAuthorizedFile(material.download_url!, material.material_name).catch(
+                  (error) => alert(error instanceof Error ? error.message : String(error)),
+                );
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AssignmentMaterialsBox(props: { assignment: Assignment }) {
   const [materials, setMaterials] = useState<AssignmentMaterial[]>([]);
-  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [layerFile, setLayerFile] = useState<File | null>(null);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [message, setMessage] = useState("Исходные слои задания можно открыть в workspace.");
   const [isBusy, setIsBusy] = useState(false);
 
@@ -1969,25 +2240,48 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
     }
   }
 
-  async function uploadMaterial() {
-    if (!materialFile) {
-      setMessage("Выберите ZIP-архив со слоями.");
+  async function uploadSingleFile(file: File): Promise<number> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const created = await storedAuthFetchJson<AssignmentMaterial[]>(
+      `/assignments/${props.assignment.id}/materials`,
+      { method: "POST", body: formData },
+    );
+    return created.length;
+  }
+
+  async function uploadMaterials() {
+    if (!layerFile && !documentFile) {
+      setMessage("Выберите хотя бы один файл — архив слоёв или документ.");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", materialFile);
     setIsBusy(true);
+    const errors: string[] = [];
+    let totalCreated = 0;
     try {
-      const createdMaterials = await storedAuthFetchJson<AssignmentMaterial[]>(`/assignments/${props.assignment.id}/materials`, {
-        method: "POST",
-        body: formData,
-      });
-      setMaterialFile(null);
+      if (layerFile) {
+        try {
+          totalCreated += await uploadSingleFile(layerFile);
+        } catch (error) {
+          errors.push(`Слои: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (documentFile) {
+        try {
+          totalCreated += await uploadSingleFile(documentFile);
+        } catch (error) {
+          errors.push(`Документ: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      setLayerFile(null);
+      setDocumentFile(null);
       await loadMaterials();
-      setMessage(`Материалы загружены: ${createdMaterials.length} слоёв.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось загрузить материал.");
+      if (errors.length > 0) {
+        setMessage(`Загружено: ${totalCreated}. Ошибки: ${errors.join("; ")}`);
+      } else {
+        setMessage(`Материалы загружены (записей: ${totalCreated}).`);
+      }
     } finally {
       setIsBusy(false);
     }
@@ -2002,34 +2296,85 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
       <div className="section-heading compact-heading">
         <div>
           <p className="eyebrow">Материалы карты</p>
-          <h3>Исходные слои задания</h3>
+          <h3>Исходные материалы задания</h3>
         </div>
         <button onClick={() => openAssignmentWorkspace(props.assignment.id)}>Открыть карту</button>
       </div>
-      <div className="upload-row">
+      <div className="material-upload-grid">
         <label>
-          ZIP со слоями или QGIS-проектом
+          Архив слоёв / QGIS-проект (ZIP)
           <input
             type="file"
             accept=".zip"
-            onChange={(event) => setMaterialFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => setLayerFile(event.target.files?.[0] ?? null)}
           />
         </label>
-        <button onClick={uploadMaterial} disabled={isBusy || !materialFile}>
-          Загрузить
+        <label>
+          Документ задания / методичка / шаблон (DOCX, PDF)
+          <input
+            type="file"
+            accept=".docx,.pdf"
+            onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
+          />
+        </label>
+        <button
+          onClick={() => void uploadMaterials()}
+          disabled={isBusy || (!layerFile && !documentFile)}
+          className="primary"
+        >
+          Загрузить выбранное
         </button>
       </div>
+      {layerFile || documentFile ? (
+        <p className="muted">
+          Выбрано: {[layerFile?.name, documentFile?.name].filter(Boolean).join(", ")}
+        </p>
+      ) : null}
       <p className="muted">{message}</p>
-      <div className="table-like compact-list">
-        {materials.map((material) => (
-          <div key={material.id}>
-            <strong>{layerDisplayName(material.material_name)}</strong>
-            <span>
-              {formatDetectedFormat(material.detected_format)} · {statusLabel(material.status)}
-            </span>
-          </div>
-        ))}
+      <AssignmentMaterialsList materials={materials} />
+    </section>
+  );
+}
+
+function StudentAssignmentMaterialsBox(props: { assignment: Assignment }) {
+  const [materials, setMaterials] = useState<AssignmentMaterial[]>([]);
+  const [message, setMessage] = useState("Загрузка материалов задания...");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await storedAuthFetchJson<AssignmentMaterial[]>(
+          `/assignments/${props.assignment.id}/materials`,
+        );
+        if (cancelled) return;
+        setMaterials(data);
+        setMessage(
+          data.length > 0
+            ? `Материалов: ${data.length}. Доступны для скачивания.`
+            : "Преподаватель пока не приложил материалы.",
+        );
+      } catch (error) {
+        if (cancelled) return;
+        setMessage(error instanceof Error ? error.message : "Не удалось загрузить материалы.");
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.assignment.id]);
+
+  return (
+    <section className="materials-box">
+      <div className="section-heading compact-heading">
+        <div>
+          <p className="eyebrow">Материалы преподавателя</p>
+          <h3>Файлы задания</h3>
+        </div>
       </div>
+      <p className="muted">{message}</p>
+      <AssignmentMaterialsList materials={materials} emptyMessage="Преподаватель пока не приложил материалы." />
     </section>
   );
 }

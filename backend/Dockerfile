@@ -6,14 +6,13 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y \
+# Build-time toolchain only — нужен на случай если pip придётся компилировать
+# что-то из исходников (manylinux wheels обычно покрывают всё, но это страховка).
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    gdal-bin \
     libgdal-dev \
     libpq-dev \
-    wget \
-    proj-bin \
-    libproj-dev\
+    libproj-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -28,15 +27,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Создаем пользователя, чтобы не запускать как root
+# В runtime нужны только shared-библиотеки для psycopg2-binary.
+# pyogrio, pyproj и shapely используют GDAL/PROJ/GEOS, вшитые в их wheels.
 RUN useradd -m appuser \
     && apt-get update \
-    && apt-get install --no-install-recommends -y \
-    libpq5 gdal-bin \
-    proj-bin \
-    libproj-dev\
+    && apt-get install --no-install-recommends -y libpq5 \
     && rm -rf /var/lib/apt/lists/* \
-    # Меняем владельца папки приложения и папки загрузок
     && mkdir /app/uploads \
     && chown -R appuser:appuser /app
 

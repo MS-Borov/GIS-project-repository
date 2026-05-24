@@ -33,7 +33,7 @@ from app.services.storage import (
     upload_bytes,
     build_asset_storage_key,
 )
-from app.services.submission_archive_parser import parse_submission_archive
+from app.services.submission_archive_parser import ArchiveTooLargeError, parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 from app.services.asset_validator import validate_asset_from_storage
 from app.services.geojson_preview import build_geojson_preview, parse_preview_bbox
@@ -88,6 +88,9 @@ def _build_submission_bundle(uploaded_files: list[dict]) -> tuple[str, bytes, st
 
 
 def _read_submission_uploads(file: UploadFile | None, files: list[UploadFile] | None) -> list[dict]:
+    from app.core.config import settings as _settings
+    from app.services.storage import read_upload_bounded
+
     uploads = []
     if file is not None and file.filename:
         uploads.append(file)
@@ -97,7 +100,14 @@ def _read_submission_uploads(file: UploadFile | None, files: list[UploadFile] | 
     uploaded_files = []
     for upload in uploads:
         filename = _safe_upload_filename(upload)
-        file_bytes = upload.file.read()
+        # ZIP-архивы / DOCX-отчёты студента — ограничиваем верхней планкой,
+        # чтобы один кривой файл не съел память на 20 параллельных сабмитов.
+        limit = (
+            _settings.max_document_upload_bytes
+            if filename.lower().endswith((".docx", ".pdf"))
+            else _settings.max_archive_upload_bytes
+        )
+        file_bytes = read_upload_bounded(upload, limit)
         uploaded_files.append({
             "filename": filename,
             "content_type": upload.content_type,
@@ -116,6 +126,8 @@ def _parsed_assets_from_uploaded_file(uploaded_file: dict) -> list[dict]:
             parsed_assets = parse_submission_archive(file_bytes)
         except zipfile.BadZipFile as exc:
             raise HTTPException(status_code=400, detail=f"ZIP archive '{filename}' is not valid.") from exc
+        except ArchiveTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         for asset in parsed_assets:
             if asset.get("asset_type") == "report" and not asset.get("group_key"):
                 asset["group_key"] = "archive_report"
@@ -502,7 +514,9 @@ def preview_submission_archive_before_submit(
         raise HTTPException(status_code=404, detail="Assignment not found")
     _ensure_student_can_submit_assignment(assignment, current_user, db)
 
-    file_bytes = file.file.read()
+    from app.core.config import settings as _settings
+    from app.services.storage import read_upload_bounded
+    file_bytes = read_upload_bounded(file, _settings.max_archive_upload_bytes)
     validation = validate_submission_file(filename=file.filename, file_bytes=file_bytes)
     if validation["status"] == "failed":
         raise HTTPException(status_code=400, detail=validation["message"])
@@ -510,7 +524,10 @@ def preview_submission_archive_before_submit(
     if not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Предпросмотр до сдачи сейчас поддерживает ZIP-архивы.")
 
-    parsed_assets = parse_submission_archive(file_bytes)
+    try:
+        parsed_assets = parse_submission_archive(file_bytes)
+    except ArchiveTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     qgis_project = _extract_qgis_project_metadata_from_archive(file_bytes)
     style_manifest = _extract_or_build_style_manifest(file_bytes)
     assets = []
@@ -981,8 +998,34 @@ def list_submissions(
     query = db.query(Submission)
     if assignment_id is not None:
         query = query.filter(Submission.assignment_id == assignment_id)
+
     if current_user.role == "student":
         query = query.filter(Submission.student_id == current_user.id)
+    elif current_user.role == "teacher":
+        # Преподаватель видит только сдачи по своим курсам
+        from app.models.assignment import Assignment as _Assignment
+        from app.models.course import Course as _Course, CourseMember as _CourseMember
+
+        teacher_course_ids = {
+            row[0]
+            for row in db.query(_Course.id)
+            .filter(_Course.teacher_id == current_user.id)
+            .all()
+        } | {
+            row[0]
+            for row in db.query(_CourseMember.course_id)
+            .filter(
+                _CourseMember.user_id == current_user.id,
+                _CourseMember.role == "teacher",
+            )
+            .all()
+        }
+        if not teacher_course_ids:
+            return []
+        query = query.join(
+            _Assignment, _Assignment.id == Submission.assignment_id
+        ).filter(_Assignment.course_id.in_(teacher_course_ids))
+    # admin — без ограничений
 
     submissions = query.order_by(Submission.id.desc()).all()
     return [to_submission_read(submission) for submission in submissions]
@@ -997,7 +1040,7 @@ def get_submission(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    ensure_submission_access(submission, current_user)
+    ensure_submission_access(submission, current_user, db=db)
     return to_submission_read(submission)
 
 
@@ -1010,7 +1053,7 @@ def list_submission_assets(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    ensure_submission_access(submission, current_user)
+    ensure_submission_access(submission, current_user, db=db)
 
     assets = (
         db.query(SubmissionAsset)
@@ -1033,7 +1076,7 @@ def list_submission_checks(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    ensure_submission_access(submission, current_user)
+    ensure_submission_access(submission, current_user, db=db)
 
     checks = (
         db.query(SubmissionCheck)
@@ -1053,7 +1096,7 @@ def get_submission_style_manifest(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    ensure_submission_access(submission, current_user)
+    ensure_submission_access(submission, current_user, db=db)
 
     if not submission.original_filename.lower().endswith(".zip"):
         return None

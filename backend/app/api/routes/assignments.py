@@ -13,9 +13,15 @@ from app.models.course import Course, CourseMember
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead
 from app.schemas.assignment_material import AssignmentMaterialRead
-from app.services.storage import build_assignment_material_storage_key, upload_bytes
+from app.core.config import settings
+from app.services.storage import (
+    build_assignment_material_storage_key,
+    read_upload_bounded,
+    upload_bytes,
+    upload_fileobj_stream,
+)
 from app.services.qgis_project_parser import extract_qgis_project_metadata_from_archive
-from app.services.submission_archive_parser import parse_submission_archive
+from app.services.submission_archive_parser import ArchiveTooLargeError, parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
@@ -25,6 +31,26 @@ def _layer_key(value: str | None) -> str:
     if not value:
         return ""
     return Path(str(value).replace("\\", "/").split("|", 1)[0]).stem.lower()
+
+
+_DOCUMENT_EXTENSIONS = {"docx", "pdf"}
+
+
+def _document_extension(filename: str) -> str | None:
+    """Возвращает расширение для документов-материалов (docx/pdf), иначе None."""
+    name = (filename or "").strip().lower()
+    if "." not in name:
+        return None
+    ext = name.rsplit(".", 1)[-1]
+    return ext if ext in _DOCUMENT_EXTENSIONS else None
+
+
+def _document_content_type(ext: str) -> str:
+    if ext == "docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if ext == "pdf":
+        return "application/pdf"
+    return "application/octet-stream"
 
 
 def _filter_assets_by_qgis_project(layer_assets: list[dict], qgis_project: dict | None) -> list[dict]:
@@ -207,15 +233,63 @@ def upload_assignment_material(
     if not _can_manage_assignment(assignment, current_user, db):
         raise HTTPException(status_code=403, detail="Assignment manager role required")
 
-    file_bytes = file.file.read()
+    # Документы-материалы (методички, шаблоны отчёта) — обрабатываем отдельно,
+    # без попытки GIS-валидации. Стримим в S3, чтобы не держать в памяти.
+    document_ext = _document_extension(file.filename or "")
+    if document_ext:
+        from app.services.storage import enforce_upload_size_limit
+        enforce_upload_size_limit(file, settings.max_document_upload_bytes)
+        storage_key = build_assignment_material_storage_key(assignment_id, file.filename)
+        upload_fileobj_stream(
+            storage_key,
+            file.file,
+            file.content_type or _document_content_type(document_ext),
+        )
+        document_material = AssignmentMaterial(
+            assignment_id=assignment_id,
+            material_name=file.filename,
+            material_type="document",
+            detected_format=document_ext,
+            status="uploaded",
+            message=f"Документ загружен ({document_ext.upper()}).",
+            storage_key=storage_key,
+        )
+        # Заменяем существующий документ с тем же именем
+        existing_documents = (
+            db.query(AssignmentMaterial)
+            .filter(
+                AssignmentMaterial.assignment_id == assignment_id,
+                AssignmentMaterial.material_name == file.filename,
+                AssignmentMaterial.detected_format == document_ext,
+            )
+            .all()
+        )
+        for existing_document in existing_documents:
+            db.delete(existing_document)
+        db.add(document_material)
+        db.commit()
+        db.refresh(document_material)
+        return [_to_material_read(document_material)]
+
+    # ZIP/архивы — нужно парсить содержимое, поэтому читаем в память, но с лимитом.
+    file_bytes = read_upload_bounded(file, settings.max_archive_upload_bytes)
     validation = validate_submission_file(file.filename, file_bytes)
     if validation["detected_format"] not in {"geojson", "shapefile_zip"}:
-        raise HTTPException(status_code=422, detail="Only GeoJSON and shapefile ZIP materials are supported for map workspace")
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Поддерживаются: GeoJSON или shapefile ZIP (исходные слои), "
+                "QGIS-проект внутри ZIP, методичка/шаблон отчёта в DOCX или PDF."
+            ),
+        )
 
     materials_to_create = []
 
     if file.filename.lower().endswith(".zip"):
-        parsed_assets = parse_submission_archive(file_bytes)
+        try:
+            parsed_assets = parse_submission_archive(file_bytes)
+        except ArchiveTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         qgis_project = extract_qgis_project_metadata_from_archive(file_bytes)
         layer_assets = [
             asset

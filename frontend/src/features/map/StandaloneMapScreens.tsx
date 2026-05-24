@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ArchivePreviewReport } from "../archive-preview/ArchivePreviewReport";
 import { LayerWorkspace } from "./LayerWorkspace";
 import {
   API_BASE_URL,
@@ -77,7 +76,6 @@ export function StandaloneArchivePreview(props: { previewKey: string }) {
       {preview ? (
         <>
           {preview.warnings.length > 0 ? <div className="alert">{preview.warnings.slice(0, 5).join(" ")}</div> : null}
-          <ArchivePreviewReport preview={preview} />
           <LayerWorkspace
             selectedSubmissionId={0}
             workspaceTitle={`Предпросмотр: ${preview.source_filename}`}
@@ -85,6 +83,7 @@ export function StandaloneArchivePreview(props: { previewKey: string }) {
             assets={preview.assets}
             preloadedPreviews={preview.previews}
             qgisProject={preview.qgis_project}
+            styleManifest={preview.style_manifest ?? null}
             isLoading={false}
             onSubmissionSelect={() => undefined}
             onFetchAssetPreview={fetchPreloadedPreview}

@@ -605,6 +605,21 @@ h2 {
   line-height: 1.45;
 }
 
+.verification-box {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #c5d1d8;
+  border-radius: 8px;
+  background: #f7fafb;
+  padding: 12px;
+}
+
+.verification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 label {
   display: grid;
   gap: 7px;
@@ -999,6 +1014,111 @@ textarea:focus {
   align-items: end;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.material-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+}
+
+.material-upload-grid > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (max-width: 720px) {
+  .material-upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.materials-list-compact {
+  display: grid;
+  gap: 4px;
+}
+
+.material-row-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid #dbe2e6;
+  border-radius: 6px;
+  background: #f8fafb;
+}
+
+.material-row-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.material-row-info strong {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.material-row-info span {
+  font-size: 11px;
+  color: #4b5c66;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #176f6b;
+  flex-shrink: 0;
+  padding: 0;
+  transition: color 120ms ease;
+}
+
+.icon-button:hover {
+  background: transparent;
+  border-color: transparent;
+  color: #0f5653;
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+:root[data-theme="dark"] .material-row-compact {
+  border-color: #304451;
+  background: #17232d;
+}
+
+:root[data-theme="dark"] .material-row-info span {
+  color: #a9bcc7;
+}
+
+:root[data-theme="dark"] .icon-button {
+  background: transparent;
+  border-color: transparent;
+  color: #6acec9;
+}
+
+:root[data-theme="dark"] .icon-button:hover {
+  background: transparent;
+  border-color: transparent;
+  color: #9ed9ff;
 }
 
 .upload-row label {
@@ -3450,8 +3570,12 @@ textarea.source-text {
 :root[data-theme="dark"] .icon-button:hover,
 :root[data-theme="dark"] .sidebar-item:not(:disabled):hover,
 :root[data-theme="dark"] .sidebar-course:not(:disabled):hover {
-  background: #223741;
   color: #9ed9ff;
+}
+
+:root[data-theme="dark"] .sidebar-item:not(:disabled):hover,
+:root[data-theme="dark"] .sidebar-course:not(:disabled):hover {
+  background: #223741;
 }
 
 :root[data-theme="dark"] .sidebar-section {
@@ -3955,6 +4079,180 @@ textarea.source-text {
   background:
     linear-gradient(90deg, rgba(31, 138, 131, 0.92), rgba(58, 89, 118, 0.9)),
     #17232d;
+}
+
+:root[data-theme="dark"] .review-box {
+  border-color: #304451;
+  background: #17232d;
+  color: #e7eef2;
+}
+
+:root[data-theme="dark"] .warning-list span {
+  color: #f4a896;
+}
+
+.report-viewer-shell {
+  min-height: 100vh;
+  padding: 16px;
+  background: #f5f7f8;
+  display: grid;
+  gap: 12px;
+}
+
+.report-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #dbe2e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px 18px;
+}
+
+.report-viewer-header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.report-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.report-viewer-content {
+  border: 1px solid #dbe2e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  overflow: auto;
+}
+
+.report-viewer-content .docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.report-viewer-content .docx {
+  margin: 0 auto;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="dark"] .report-viewer-shell {
+  background: #0c1620;
+}
+
+:root[data-theme="dark"] .report-viewer-header {
+  border-color: #304451;
+  background: #17232d;
+  color: #e7eef2;
+}
+
+:root[data-theme="dark"] .report-viewer-content {
+  border-color: #304451;
+  background: #101820;
+}
+
+.report-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 31, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.report-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  max-height: calc(100vh - 48px);
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.report-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #dbe2e6;
+  background: #f8fafb;
+}
+
+.report-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.report-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.report-modal-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  background: #f3f5f7;
+}
+
+.report-modal-content .docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.report-modal-content .docx {
+  margin: 0 auto;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="dark"] .report-modal-overlay {
+  background: rgba(5, 10, 14, 0.75);
+}
+
+:root[data-theme="dark"] .report-modal {
+  background: #17232d;
+}
+
+:root[data-theme="dark"] .report-modal-header {
+  border-color: #304451;
+  background: #101820;
+  color: #e7eef2;
+}
+
+:root[data-theme="dark"] .report-modal-content {
+  background: #0c1620;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #176f6b;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.link-button:hover {
+  color: #0f5048;
+}
+
+:root[data-theme="dark"] .link-button {
+  color: #6acec9;
+}
+
+:root[data-theme="dark"] .link-button:hover {
+  color: #9ee5e0;
 }
 
 @media (max-width: 860px) {

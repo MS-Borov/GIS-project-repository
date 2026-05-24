@@ -80,21 +80,22 @@ def generate_text_with_llm(
     images: list[dict] | None = None,
 ) -> dict:
     backend = (settings.llm_backend or "").lower().strip()
+    images = images or []
 
     if backend == "cerebras_relay":
-        return _generate_text_with_cerebras_relay(system_prompt, user_prompt)
+        return _generate_text_with_cerebras_relay(system_prompt, user_prompt, images)
 
     if backend == "openrouter":
-        return _generate_text_with_openrouter(system_prompt, user_prompt, images or [])
+        return _generate_text_with_openrouter(system_prompt, user_prompt, images)
 
     if backend == "ollama":
-        return _generate_text_with_ollama(system_prompt, user_prompt)
+        return _generate_text_with_ollama(system_prompt, user_prompt, images)
 
     return {
         "status": "failed",
         "text": None,
         "message": f"LLM backend '{settings.llm_backend}' не поддерживается.",
-        "meta": {"backend": settings.llm_backend},
+        "meta": {"backend": settings.llm_backend, "image_count": len(images)},
     }
 
 
@@ -418,13 +419,22 @@ def _repair_openrouter_text(text: str) -> tuple[str | None, dict]:
         }
 
 
-def _generate_text_with_cerebras_relay(system_prompt: str, user_prompt: str) -> dict:
+def _generate_text_with_cerebras_relay(
+    system_prompt: str,
+    user_prompt: str,
+    images: list[dict] | None = None,
+) -> dict:
+    images = images or []
     payload = {
         "model": settings.cerebras_model,
         "system_prompt": system_prompt,
         "user_prompt": user_prompt,
         "temperature": 0.2,
     }
+    # Relay получает картинки, даже если их игнорирует — пусть будут видны
+    # в логах и при последующем переходе на vision-модель не потеряются.
+    if images:
+        payload["images"] = images
 
     req = Request(
         url=settings.cerebras_relay_url,
@@ -490,16 +500,31 @@ def _generate_text_with_cerebras_relay(system_prompt: str, user_prompt: str) -> 
         "meta": {
             "backend": "cerebras_relay",
             "model": settings.cerebras_model,
+            "image_count": len(images),
+            "images_forwarded_to_relay": bool(images),
         },
     }
 
 
-def _generate_text_with_ollama(system_prompt: str, user_prompt: str) -> dict:
+def _generate_text_with_ollama(
+    system_prompt: str,
+    user_prompt: str,
+    images: list[dict] | None = None,
+) -> dict:
+    images = images or []
+    user_message: dict = {"role": "user", "content": user_prompt}
+    # Ollama vision-модели принимают images как массив base64 в самом сообщении
+    if images:
+        user_message["images"] = [
+            image["data_base64"]
+            for image in images
+            if image.get("data_base64")
+        ]
     payload = {
         "model": settings.llm_model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            user_message,
         ],
         "stream": False,
     }

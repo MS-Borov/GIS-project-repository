@@ -27,7 +27,7 @@ def download_submission(
             status_code=404,
             detail=f"Submission with id={submission_id} not found in DB",
         )
-    ensure_submission_access(submission, current_user)
+    ensure_submission_access(submission, current_user, db=db)
 
     s3 = get_s3_client()
 

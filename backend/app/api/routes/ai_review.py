@@ -96,7 +96,7 @@ def create_ai_review(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    ensure_submission_access(submission, current_user)
+    ensure_submission_access(submission, current_user, db=db)
     enforce_rate_limit(
         build_rate_limit_key("ai-review", get_client_ip(request), str(current_user.id)),
         max_requests=10,

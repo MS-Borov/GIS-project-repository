@@ -137,6 +137,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env
 export const AUTH_STORAGE_KEY = "gis_edu_auth";
 export const THEME_STORAGE_KEY = "gis_edu_theme";
 export const ARCHIVE_PREVIEW_STORAGE_PREFIX = "gis_edu_archive_preview:";
+export const REPORT_PREVIEW_STORAGE_PREFIX = "gis_edu_report_preview:";
 export const SHAPEFILE_PART_EXTENSIONS = new Set([".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"]);
 export const RUSSIA_PREVIEW_BBOX = "19,41,180,82";
 export const RUSSIA_PREVIEW_QUERY = `bbox=${encodeURIComponent(RUSSIA_PREVIEW_BBOX)}&clip_boundary=russia`;
@@ -279,8 +280,8 @@ export function storedUserRole(): UserRole | null {
     return null;
   }
   try {
-    const parsed = JSON.parse(savedAuth) as AuthResponse;
-    return parsed.user.role;
+    const parsed = JSON.parse(savedAuth) as Partial<AuthResponse>;
+    return parsed?.user?.role ?? null;
   } catch {
     return null;
   }

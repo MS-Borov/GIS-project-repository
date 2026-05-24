@@ -95,6 +95,15 @@ function openMapViewer(submissionId: number) {
   window.open(mapViewerUrl(submissionId), "_blank", "noopener,noreferrer");
 }
 
+function findReportAssets(assets: SubmissionAsset[]): SubmissionAsset[] {
+  return assets.filter((asset) => asset.asset_type === "report");
+}
+
+function reportButtonLabel(asset: SubmissionAsset, total: number): string {
+  if (total <= 1) return "Просмотреть отчёт";
+  return `Отчёт: ${asset.asset_name}`;
+}
+
 function statusLabel(status: string) {
   const value = status.toLowerCase();
   if (value === "passed") return "Пройдено";
@@ -125,6 +134,7 @@ export function SubmissionPanel(props: {
   onFetchAssetPreview: (assetId: number) => Promise<GeoJsonPreview>;
   onMapFeatureSelect: (index: number | null) => void;
   onDraftSubmitted?: (submission: Submission) => void | Promise<void>;
+  onPreviewReport?: (asset: SubmissionAsset) => void;
 }) {
   return (
     <section className="section-panel">
@@ -144,6 +154,28 @@ export function SubmissionPanel(props: {
               Слои в новой вкладке
             </button>
           ) : null}
+          {(() => {
+            const reportAssets = findReportAssets(props.assets);
+            if (reportAssets.length === 0) return null;
+            return (
+              <>
+                {reportAssets.length > 1 ? (
+                  <span className="muted" title="В архиве несколько DOCX — AI-review анализирует первый">
+                    Отчётов: {reportAssets.length}
+                  </span>
+                ) : null}
+                {reportAssets.map((asset) => (
+                  <button
+                    key={asset.id}
+                    onClick={() => props.onPreviewReport?.(asset)}
+                    disabled={props.isLoading || !props.onPreviewReport}
+                  >
+                    {reportButtonLabel(asset, reportAssets.length)}
+                  </button>
+                ))}
+              </>
+            );
+          })()}
           <button onClick={props.onGenerateAiReview} disabled={props.isLoading || !props.selectedSubmissionId}>
             AI-review
           </button>
@@ -370,4 +402,3 @@ function MapPreviewPanel(props: {
     </section>
   );
 }
-

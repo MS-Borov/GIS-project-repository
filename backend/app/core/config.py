@@ -9,6 +9,21 @@ class Settings(BaseSettings):
     db_name: str = "gis_platform"
     db_user: str = "postgres"
     db_password: str = "postgres"
+    db_echo: bool = False
+    db_pool_size: int = 10
+    db_max_overflow: int = 5
+    db_pool_recycle_seconds: int = 1800
+
+    # Лимиты на загружаемые файлы. Жёсткий потолок — nginx client_max_body_size.
+    # Здесь — backend-уровень: даём 413 раньше чем съедим память.
+    max_document_upload_bytes: int = 30 * 1024 * 1024   # 30 MB — для DOCX/PDF
+    max_archive_upload_bytes: int = 100 * 1024 * 1024   # 100 MB — для ZIP-архивов сдач/материалов
+
+    # Защита от ZIP-bomb: сжатый 100 MB может распаковаться в гигабайты.
+    # Этот лимит = сумма uncompressed size всех членов архива.
+    # 500 MB разрешает реальные shapefile'ы с пожатыми геоданными
+    # (типичный compression ratio для .shp/.dbf ~3-5x), но режет бомбы.
+    max_archive_uncompressed_bytes: int = 500 * 1024 * 1024  # 500 MB
 
     s3_endpoint: str = "minio:9000"
     s3_access_key_id: str = "minioadmin"
@@ -39,6 +54,21 @@ class Settings(BaseSettings):
     auth_secret_key: str = "change-me-in-production"
     auth_access_token_expire_minutes: int = 60 * 24
     rate_limit_enabled: bool = True
+
+    email_verification_required: bool = False
+    email_verification_code_ttl_minutes: int = 20
+    email_verification_resend_seconds: int = 60
+    email_verification_dev_return_code: bool = False
+
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str = "GIS Education Platform"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: int = 15
 
     ai_digitizer_url: str = "http://ai-digitizer:8790"
     ai_digitizer_timeout_seconds: int = 45
