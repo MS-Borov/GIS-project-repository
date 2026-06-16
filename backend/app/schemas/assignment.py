@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -12,5 +14,10 @@ class AssignmentRead(BaseModel):
     course_id: int | None = None
     title: str
     description: str | None = None
+    # Заполняется только в представлении корзины; для активных заданий — None.
+    deleted_at: datetime | None = None
+    # Статус последней сдачи студента по заданию (pending/returned/accepted) или
+    # None, если студент ещё не сдавал. Для преподавателя/админа всегда None.
+    my_submission_status: str | None = None
 
     model_config = {"from_attributes": True}

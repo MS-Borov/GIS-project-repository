@@ -4,12 +4,13 @@ import urllib.error
 import urllib.request
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.deps.auth import get_current_user
 from app.core.config import settings
 from app.models.user import User
+from app.services.rate_limit import build_rate_limit_key, enforce_rate_limit, get_client_ip
 
 router = APIRouter(prefix="/map-assistant", tags=["map-assistant"])
 
@@ -17,7 +18,9 @@ router = APIRouter(prefix="/map-assistant", tags=["map-assistant"])
 class SegmentBoxRequest(BaseModel):
     assignment_id: int | None = None
     draft_layer_id: int | None = None
-    image_data: str = Field(..., description="Base64 image data or data URL.")
+    # Лимит ~12 МБ base64 = ~9 МБ декодированного PNG. Карта-снимок фронта ~1–3 МБ,
+    # с запасом ×4 — спам не проходит, нормальная работа проходит.
+    image_data: str = Field(..., max_length=12_000_000, description="Base64 image data or data URL.")
     bbox_pixels: list[float] = Field(..., min_length=4, max_length=4)
     image_size: list[int] | None = Field(default=None, min_length=2, max_length=2)
     image_extent: list[float] | None = Field(
@@ -73,9 +76,16 @@ def _fallback_bbox_geometry(payload: SegmentBoxRequest) -> dict[str, Any] | None
 @router.post("/segment-box", response_model=SegmentBoxResponse)
 def segment_box(
     payload: SegmentBoxRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ) -> SegmentBoxResponse:
-    del current_user
+    # Ограничиваем спам AI-запросами: prompt-ml fit'ит RF на каждый запрос,
+    # серия из 100 кликов за минуту положит очередь для всех остальных.
+    enforce_rate_limit(
+        build_rate_limit_key("ai-segment-box", get_client_ip(request), str(current_user.id)),
+        max_requests=30,
+        window_seconds=300,
+    )
     url = f"{settings.ai_digitizer_url.rstrip('/')}/segment-box"
     data = json.dumps(payload.model_dump(exclude_none=True), ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(

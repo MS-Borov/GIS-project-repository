@@ -1,4 +1,5 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ATTRIBUTE_FIELD_TYPES, type AttributeFieldType } from "../feature-table/FeatureTables";
 
 type DraftPropertiesPanelProps = {
   draftId: number | null;
@@ -22,11 +23,23 @@ type DraftPropertiesPanelProps = {
   onDraftFillOpacityChange: (value: number) => void;
   onNewDraftFieldNameChange: (value: string) => void;
   onAddDraftField: () => void;
+  onAddDraftFieldWithType?: (field: string, type: AttributeFieldType) => void;
   onRemoveDraftField: (field: string) => void;
   onApplyDraftFieldsToFeatures: () => void;
 };
 
 export function DraftPropertiesPanel(props: DraftPropertiesPanelProps) {
+  const [newFieldType, setNewFieldType] = useState<AttributeFieldType>("text");
+
+  const handleAddField = () => {
+    if (props.onAddDraftFieldWithType) {
+      props.onAddDraftFieldWithType(props.newDraftFieldName, newFieldType);
+      props.onNewDraftFieldNameChange("");
+    } else {
+      props.onAddDraftField();
+    }
+  };
+
   return (
     <section
       className="draft-properties-panel"
@@ -66,10 +79,10 @@ export function DraftPropertiesPanel(props: DraftPropertiesPanelProps) {
             value={props.draftGeometryType}
             onChange={(event) => props.onDraftGeometryTypeChange(event.target.value)}
           >
-            <option value="mixed">Авто / смешанный</option>
-            <option value="Point">Точки</option>
-            <option value="LineString">Линии</option>
             <option value="Polygon">Полигоны</option>
+            <option value="LineString">Линии</option>
+            <option value="Point">Точки</option>
+            <option value="mixed">Авто (без ограничения типа)</option>
           </select>
         </label>
         <label>
@@ -124,12 +137,23 @@ export function DraftPropertiesPanel(props: DraftPropertiesPanelProps) {
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                props.onAddDraftField();
+                handleAddField();
               }
             }}
-            placeholder="Новое поле"
+            placeholder="Имя поля"
           />
-          <button onClick={props.onAddDraftField}>Добавить поле</button>
+          <select
+            value={newFieldType}
+            onChange={(event) => setNewFieldType(event.target.value as AttributeFieldType)}
+            title="Тип поля"
+          >
+            {ATTRIBUTE_FIELD_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+          <button onClick={handleAddField}>Добавить поле</button>
         </div>
       </div>
     </section>

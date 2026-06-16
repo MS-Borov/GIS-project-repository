@@ -19,6 +19,7 @@ import Snap from "ol/interaction/Snap";
 import type { Segmenters } from "ol/interaction/Snap";
 import TileLayer from "ol/layer/Tile";
 import VectorLayer from "ol/layer/Vector";
+import VectorImageLayer from "ol/layer/VectorImage";
 import OSM from "ol/source/OSM";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
@@ -43,6 +44,20 @@ import { DraftPropertiesPanel } from "./DraftPropertiesPanel";
 import { MapToolbar } from "./MapToolbar";
 
 type EditMode = "select" | "point" | "line" | "polygon" | "aiBox" | "measure";
+
+// Тип геометрии слоя -> допустимый тип рисования.
+// null = тип не задан (legacy "mixed"/пусто), ограничение не накладывается.
+function lockedDrawTypeFromGeometry(
+  geomType?: string | null,
+): "Point" | "LineString" | "Polygon" | null {
+  if (!geomType) return null;
+  const value = geomType.toLowerCase();
+  if (value === "mixed") return null;
+  if (value.includes("line")) return "LineString";
+  if (value.includes("point")) return "Point";
+  if (value.includes("polygon")) return "Polygon";
+  return null;
+}
 
 type BasemapMode = "osm" | "satellite" | "none";
 
@@ -153,7 +168,10 @@ const AUTH_STORAGE_KEY = "gis_edu_auth";
 
 const LEGACY_DRAFT_DEFAULT_FIELDS = new Set(["name", "description"]);
 
-const RUSSIA_VIEW_EXTENT_LONLAT = [5, 34, 190, 86];
+// Тесная рамка для ВПИСЫВАНИЯ (полный охват / автоподгонка): запад 19°E (граница
+// Калининграда), без широкого западного/южного океана, чтобы Россия вставала по
+// центру, а не «прижатой на восток».
+const RUSSIA_FIT_EXTENT_LONLAT = [19, 41, 180, 82];
 
 const SATELLITE_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
@@ -496,8 +514,69 @@ function transformExtentSafe(
   }
 }
 
-function russiaViewExtentForProjection(projection: CoordinateProjectionCode) {
-  return transformExtentSafe(RUSSIA_VIEW_EXTENT_LONLAT, "EPSG:4326", projection) ?? undefined;
+function russiaFitExtentForProjection(projection: CoordinateProjectionCode) {
+  return transformExtentSafe(RUSSIA_FIT_EXTENT_LONLAT, "EPSG:4326", projection) ?? undefined;
+}
+
+function isLonLatPosition(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length >= 2 && typeof value[0] === "number" && typeof value[1] === "number";
+}
+
+function unwrapAntimeridianRing(ring: unknown): unknown {
+  if (!Array.isArray(ring) || !ring.every(isLonLatPosition)) {
+    return ring;
+  }
+  let offset = 0;
+  let previousLon = ring[0][0];
+  return ring.map((position, index) => {
+    const lon = position[0];
+    if (index > 0) {
+      const delta = lon + offset - previousLon;
+      if (delta > 180) {
+        offset -= 360;
+      } else if (delta < -180) {
+        offset += 360;
+      }
+    }
+    const nextLon = lon + offset;
+    previousLon = nextLon;
+    return [nextLon, position[1], ...position.slice(2)];
+  });
+}
+
+function unwrapAntimeridianGeometry(geometry: GeoJsonGeometry | null): GeoJsonGeometry | null {
+  if (!geometry?.coordinates && !geometry?.geometries) {
+    return geometry;
+  }
+  if (geometry.type === "Polygon" && Array.isArray(geometry.coordinates)) {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map(unwrapAntimeridianRing),
+    };
+  }
+  if (geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates)) {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map((polygon) =>
+        Array.isArray(polygon) ? polygon.map(unwrapAntimeridianRing) : polygon,
+      ),
+    };
+  }
+  if (geometry.type === "GeometryCollection" && Array.isArray(geometry.geometries)) {
+    return {
+      ...geometry,
+      geometries: geometry.geometries.map(unwrapAntimeridianGeometry).filter(Boolean) as GeoJsonGeometry[],
+    };
+  }
+  return geometry;
+}
+
+function geoJsonFeatureForMap(feature: GeoJsonFeature): GeoJsonFeature {
+  if (!feature.geometry) {
+    return feature;
+  }
+  const geometry = unwrapAntimeridianGeometry(feature.geometry);
+  return geometry === feature.geometry ? feature : { ...feature, geometry };
 }
 
 function formatMapCoordinate(
@@ -567,7 +646,10 @@ export function MultiLayerMapPanel(props: {
   const mapRef = useRef<Map | null>(null);
   const selectedFeatureRef = useRef<SelectedLayerFeature>(props.selectedFeature);
   const selectedFeatureKeysRef = useRef<Set<string>>(new Set());
-  const vectorLayerRefs = useRef<VectorLayer<VectorSource>[]>([]);
+  // Слои-источники рендерим как VectorImage (растрируются в картинку) — это
+  // резко ускоряет панораму/зум при большом числе объектов. Редактируемые слои
+  // (черновик, AI, измерение) остаются интерактивными VectorLayer.
+  const vectorLayerRefs = useRef<Array<VectorLayer<VectorSource> | VectorImageLayer<VectorSource>>>([]);
   const basemapLayerRef = useRef<TileLayer<OSM | XYZ> | null>(null);
   const draftLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const aiSuggestionLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
@@ -575,12 +657,35 @@ export function MultiLayerMapPanel(props: {
   const mapLayerSourcesRef = useRef<VectorSource[]>([]);
   const draftSourceRef = useRef(new VectorSource());
   const measureSourceRef = useRef(new VectorSource());
+  const layersRef = useRef(props.layers);
+  const layerStylesRef = useRef(props.layerStyles);
+  // Кэш нормализованного стиля по слою: чтобы не пересчитывать normalizeLayerStyle
+  // для каждого объекта на каждый кадр. Сбрасывается, когда меняется сам стиль слоя.
+  // NB: Map в этом файле — это ol/Map, поэтому кэш на обычном объекте.
+  const normalizedLayerStyleCacheRef = useRef<
+    Record<number, { source: LayerStyleSettings | undefined; normalized: ReturnType<typeof normalizeLayerStyle> }>
+  >({});
+  const draftStyleRef = useRef({ color: "#d83f3f", fillOpacity: 0.2 });
   const drawInteractionRef = useRef<Draw | null>(null);
   const mapViewStateRef = useRef<MapViewState | null>(null);
-  const coordinateProjectionRef = useRef<CoordinateProjectionCode>("EPSG:4326");
-  const mapProjectionRef = useRef<CoordinateProjectionCode>("EPSG:4326");
+  const coordinateProjectionRef = useRef<CoordinateProjectionCode>("EPSG:3857");
+  const mapProjectionRef = useRef<CoordinateProjectionCode>("EPSG:3857");
   const editModeRef = useRef<EditMode>("select");
   const lastFitKeyRef = useRef<string | null>(null);
+  // DOM-узел перетаскиваемого окна: во время drag двигаем его напрямую через
+  // style, чтобы не ререндерить тяжёлую панель (карта + таблица) на каждый
+  // pointermove. В React-стейт позицию коммитим один раз на pointerup.
+  const draggedWindowElRef = useRef<HTMLElement | null>(null);
+  // Предыдущее состояние режима редактирования — чтобы поймать переход вкл→выкл
+  // и автосохранить черновик при завершении редактирования.
+  const wasDraftEditingRef = useRef(props.isDraftEditingEnabled);
+  // Актуальные действия для горячих клавиш: keydown-эффект вешается один раз
+  // (deps []), поэтому читаем функции через ref, чтобы не словить устаревшее
+  // замыкание (например старый activeEditableLayerId при удалении).
+  const keyboardActionsRef = useRef<{ deleteSelected: () => void; clearSelection: () => void }>({
+    deleteSelected: () => {},
+    clearSelection: () => {},
+  });
   const lastZoomToLayerTickRef = useRef(props.zoomToLayerTick);
   const autoLoadedDraftRef = useRef(false);
   const selectedDraftFeatureRef = useRef<Feature<Geometry> | null>(null);
@@ -604,14 +709,16 @@ export function MultiLayerMapPanel(props: {
   const [mapZoom, setMapZoom] = useState(mapViewStateRef.current?.zoom ?? 2);
   const [mapScaleText, setMapScaleText] = useState(formatMapScale(mapViewStateRef.current?.zoom ?? 2));
   const [measureDistanceText, setMeasureDistanceText] = useState("");
-  const [coordinateProjection, setCoordinateProjection] = useState<CoordinateProjectionCode>("EPSG:4326");
-  const [isRussiaExtentLocked, setIsRussiaExtentLocked] = useState(false);
+  const [measureEndpoints, setMeasureEndpoints] = useState<{ start: string; end: string } | null>(null);
+  const [coordinateProjection, setCoordinateProjection] = useState<CoordinateProjectionCode>("EPSG:3857");
   const [basemapMode, setBasemapMode] = useState<BasemapMode>(props.hideBasemap ? "none" : "osm");
   const isBasemapVisible = basemapMode !== "none";
   const [cursorCoordinates, setCursorCoordinates] = useState("—");
   const [draftRevision, setDraftRevision] = useState(0);
   const [draftHistoryRevision, setDraftHistoryRevision] = useState(0);
   const [draftId, setDraftId] = useState<number | null>(null);
+  // Необязательный отчёт (DOCX/PDF), прикладываемый к сдаче прямо из карты.
+  const [submitReportFile, setSubmitReportFile] = useState<File | null>(null);
   const [draftName, setDraftName] = useState("draft-layer");
   const [draftGeometryType, setDraftGeometryType] = useState("mixed");
   const [draftCrs, setDraftCrs] = useState("EPSG:4326");
@@ -640,7 +747,12 @@ export function MultiLayerMapPanel(props: {
   const [newDraftFieldName, setNewDraftFieldName] = useState("");
   const [attributeKey, setAttributeKey] = useState("");
   const [attributeValue, setAttributeValue] = useState("");
-  const mapProjection = coordinateProjection;
+  // СК-селектор задаёт проекцию ВИДА карты: при смене СК карта реально
+  // перепроицируется — слои перечитываются с новым featureProjection, View
+  // пересоздаётся (эффект-перестроитель карты зависит от mapProjection),
+  // черновики/AI трансформируются (эффект ниже), а координаты курсора
+  // показываются в этой же СК.
+  const mapProjection: CoordinateProjectionCode = coordinateProjection;
   const removedLayerKey = (props.removedLayerIds ?? []).join(",");
   const visibleLayers = props.layers.filter((layer) => layer.visible);
   const canPersistDraft = Boolean(props.allowDraftSubmit) && storedUserRole() === "student" && Boolean(props.assignmentId);
@@ -648,6 +760,26 @@ export function MultiLayerMapPanel(props: {
   const editableDraftFeatures = draftSourceRef.current
     .getFeatures()
     .filter((feature) => feature.get("draft_layer_asset_id") === props.activeEditableLayerId);
+  // Тип геометрии, которым ограничиваем рисование в активном слое.
+  // Для существующего слоя берём ЕГО реальный тип (preview.geometry_types),
+  // для нового черновика — выбранный в свойствах (draftGeometryType).
+  // Неопределённость (0 или несколько типов) → "mixed" = без ограничения,
+  // чтобы случайно не запретить рисование в уже существующем слое.
+  const activeEditableLayer =
+    props.activeEditableLayerId !== null
+      ? props.layers.find((layer) => layer.asset.id === props.activeEditableLayerId)
+      : undefined;
+  const activeLayerStyle =
+    props.activeEditableLayerId !== null ? props.layerStyles[props.activeEditableLayerId] : undefined;
+  // Тип геометрии слоя: сначала явный выбор «Тип слоя» (стиль), затем тип по объектам слоя.
+  const activeLayerKind =
+    activeLayerStyle?.geometryKind ??
+    (activeEditableLayer ? layerGeometryKind(activeEditableLayer.preview) : undefined);
+  // Если тип определён (point/line/polygon) — ограничиваем им; иначе берём выбор из свойств черновика.
+  const lockGeometryType =
+    activeLayerKind === "point" || activeLayerKind === "line" || activeLayerKind === "polygon"
+      ? activeLayerKind
+      : draftGeometryType;
   const fitKey = [
     visibleLayers.map((layer) => `${layer.asset.id}:${layer.preview.preview_feature_count}`).join(","),
     props.zoomToLayerId ?? "all",
@@ -688,6 +820,18 @@ export function MultiLayerMapPanel(props: {
   }, [props.selectedFeature]);
 
   useEffect(() => {
+    layersRef.current = props.layers;
+    layerStylesRef.current = props.layerStyles;
+    vectorLayerRefs.current.forEach((layer) => layer.changed());
+    draftLayerRef.current?.changed();
+  }, [props.layers, props.layerStyles]);
+
+  useEffect(() => {
+    draftStyleRef.current = { color: draftColor, fillOpacity: draftFillOpacity };
+    draftLayerRef.current?.changed();
+  }, [draftColor, draftFillOpacity]);
+
+  useEffect(() => {
     aiSuggestionRef.current = aiSuggestion;
     aiSuggestion?.targetFeature.changed();
     draftLayerRef.current?.changed();
@@ -703,6 +847,20 @@ export function MultiLayerMapPanel(props: {
       setEditMode("select");
     }
   }, [props.isDraftEditingEnabled, editMode]);
+
+  // Если активный слой имеет конкретный тип геометрии, а выбран инструмент рисования
+  // другого типа — сбрасываем на «выбор», чтобы нельзя было рисовать не тот тип.
+  useEffect(() => {
+    const locked = lockedDrawTypeFromGeometry(lockGeometryType);
+    if (!locked) return;
+    if (editMode === "point" || editMode === "line" || editMode === "polygon") {
+      const lockedMode: EditMode =
+        locked === "Point" ? "point" : locked === "LineString" ? "line" : "polygon";
+      if (editMode !== lockedMode) {
+        setEditMode("select");
+      }
+    }
+  }, [lockGeometryType, editMode]);
 
   useEffect(() => {
     coordinateProjectionRef.current = coordinateProjection;
@@ -763,6 +921,16 @@ export function MultiLayerMapPanel(props: {
   }, [mapProjection]);
 
   useEffect(() => {
+    // При выборе любого другого инструмента убираем замер — и подпись «Линейка: …»,
+    // и саму линию замера с карты.
+    if (editMode !== "measure") {
+      setMeasureDistanceText("");
+      setMeasureEndpoints(null);
+      measureSourceRef.current.clear();
+    }
+  }, [editMode]);
+
+  useEffect(() => {
     setBasemapMode(props.hideBasemap ? "none" : "osm");
   }, [props.hideBasemap]);
 
@@ -774,10 +942,42 @@ export function MultiLayerMapPanel(props: {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName ?? "";
+      const isFormField =
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || Boolean(target?.isContentEditable);
+      const isInteractive = isFormField || tag === "BUTTON" || tag === "A";
+
+      if (event.key === "Escape") {
+        // Прерываем текущее рисование и снимаем выделение (в полях ввода
+        // выделение не трогаем — Escape там «отменить ввод»).
+        try {
+          drawInteractionRef.current?.abortDrawing();
+        } catch {
+          /* нет активного эскиза */
+        }
+        if (!isFormField) {
+          keyboardActionsRef.current.clearSelection();
+        }
         return;
       }
-      drawInteractionRef.current?.abortDrawing();
+
+      if ((event.key === "Delete" || event.key === "Backspace") && !isFormField) {
+        event.preventDefault();
+        keyboardActionsRef.current.deleteSelected();
+        return;
+      }
+
+      if (event.key === "Enter" && !isInteractive) {
+        // Завершить создание текущего объекта (как двойной клик).
+        event.preventDefault();
+        try {
+          drawInteractionRef.current?.finishDrawing();
+        } catch {
+          /* нечего завершать */
+        }
+        return;
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -918,7 +1118,11 @@ export function MultiLayerMapPanel(props: {
             },
           )
         : [];
-    if (props.activeEditableLayerId !== null) {
+    // Привязку к слою ставим ТОЛЬКО для нового объекта (у которого её ещё нет).
+    // Иначе массовые вызовы (экспорт, «применить поля ко всем») перетегировали
+    // бы уже нарисованные объекты активным слоем — и объекты одного слоя
+    // утекали в другой (например линии из границы → в water при экспорте).
+    if (props.activeEditableLayerId !== null && feature.get("draft_layer_asset_id") === undefined) {
       feature.set("draft_layer_asset_id", props.activeEditableLayerId);
       feature.set("draft_layer_name", props.activeEditableLayerName ?? `layer-${props.activeEditableLayerId}`);
     }
@@ -1107,7 +1311,7 @@ export function MultiLayerMapPanel(props: {
 
   async function captureCleanMapImageDataForAi(map: Map) {
     const hiddenLayers = [...vectorLayerRefs.current, draftLayerRef.current, aiSuggestionLayerRef.current].filter(
-      (layer): layer is VectorLayer<VectorSource> => Boolean(layer),
+      (layer): layer is VectorLayer<VectorSource> | VectorImageLayer<VectorSource> => Boolean(layer),
     );
     const previousVisibility = hiddenLayers.map((layer) => layer.getVisible());
     hiddenLayers.forEach((layer) => layer.setVisible(false));
@@ -1448,6 +1652,22 @@ export function MultiLayerMapPanel(props: {
     setDraftRevision((value) => value + 1);
   }
 
+  function clearAllSelection() {
+    // Снимает выделение и с черновых, и с исходных объектов (как клик по пустому).
+    if (selectedDraftFeatureRef.current) {
+      const previousFeature = selectedDraftFeatureRef.current;
+      selectedDraftFeatureRef.current = null;
+      previousFeature.changed();
+      setDraftRevision((value) => value + 1);
+    }
+    draftLayerRef.current?.changed();
+    setSelectedFeatureKeys(new Set());
+    props.onFeatureSelect(null);
+  }
+
+  keyboardActionsRef.current.deleteSelected = deleteSelectedDraftFeature;
+  keyboardActionsRef.current.clearSelection = clearAllSelection;
+
   function clearDraftLayer() {
     const featuresToRemove =
       props.activeEditableLayerId === null
@@ -1675,6 +1895,60 @@ export function MultiLayerMapPanel(props: {
     map.getView().fit(extent, {
       padding: [70, 70, 70, 70],
       maxZoom: 18,
+      duration: 220,
+    });
+  }
+  // Полный охват: вписываем в экран все объекты слоёв + черновика по центру.
+  // Сырой bbox может «раздуться» на весь мир, если в слое есть геометрия,
+  // обёрнутая через 180-й меридиан (Чукотка единым мультиполигоном даёт bbox
+  // от −180° до +180°). Поэтому итог ОБРЕЗАЕМ рамкой России в текущей СК: для
+  // обычных данных (⊂ России) обрезка ничего не меняет — вид остаётся тесным;
+  // для «всемирного» bbox он схлопывается до России. Та же рамка у блокировки «РФ».
+  function zoomToFullExtent() {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+    const extent = [Infinity, Infinity, -Infinity, -Infinity];
+    const merge = (geomExtent?: number[] | null) => {
+      if (!geomExtent?.every(Number.isFinite)) {
+        return;
+      }
+      extent[0] = Math.min(extent[0], geomExtent[0]);
+      extent[1] = Math.min(extent[1], geomExtent[1]);
+      extent[2] = Math.max(extent[2], geomExtent[2]);
+      extent[3] = Math.max(extent[3], geomExtent[3]);
+    };
+    mapLayerSourcesRef.current.forEach((source) => merge(source.getExtent()));
+    draftSourceRef.current
+      .getFeatures()
+      .forEach((feature) => merge(feature.getGeometry()?.getExtent()));
+    if (!Number.isFinite(extent[0])) {
+      return;
+    }
+
+    let fitExtent = extent;
+    const russia = russiaFitExtentForProjection(mapProjection);
+    if (russia?.every(Number.isFinite)) {
+      const clamped = [
+        Math.max(extent[0], russia[0]),
+        Math.max(extent[1], russia[1]),
+        Math.min(extent[2], russia[2]),
+        Math.min(extent[3], russia[3]),
+      ];
+      if (clamped[0] < clamped[2] && clamped[1] < clamped[3]) {
+        fitExtent = clamped;
+      }
+    }
+
+    if (fitExtent[0] === fitExtent[2] && fitExtent[1] === fitExtent[3]) {
+      const padding = mapProjection === "EPSG:4326" ? 0.0005 : 60;
+      fitExtent = [fitExtent[0] - padding, fitExtent[1] - padding, fitExtent[2] + padding, fitExtent[3] + padding];
+    }
+
+    map.getView().fit(fitExtent, {
+      padding: [40, 40, 40, 40],
+      maxZoom: 12,
       duration: 220,
     });
   }
@@ -1983,6 +2257,17 @@ export function MultiLayerMapPanel(props: {
     }
   }
 
+  // Завершение редактирования (тумблер «Редактировать» нажат повторно):
+  // режим редактирования вкл→выкл → автосохранение черновика.
+  useEffect(() => {
+    const wasEditing = wasDraftEditingRef.current;
+    wasDraftEditingRef.current = props.isDraftEditingEnabled;
+    if (wasEditing && !props.isDraftEditingEnabled && canPersistDraft) {
+      void saveDraftLayer();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.isDraftEditingEnabled]);
+
   async function submitDraftLayer() {
     const draft = await saveDraftLayer();
     if (!draft) {
@@ -1991,10 +2276,21 @@ export function MultiLayerMapPanel(props: {
 
     setIsDraftBusy(true);
     try {
+      const hadReport = Boolean(submitReportFile);
+      const formData = new FormData();
+      if (submitReportFile) {
+        formData.append("report", submitReportFile);
+      }
       const submission = await storedAuthFetchJson<Submission>(`/map-drafts/${draft.id}/submit`, {
         method: "POST",
+        body: formData,
       });
-      setDraftStatus(`Черновик сдан как submission #${submission.id}.`);
+      setSubmitReportFile(null);
+      setDraftStatus(
+        hadReport
+          ? `Черновик и отчёт сданы как submission #${submission.id}.`
+          : `Черновик сдан как submission #${submission.id}.`,
+      );
       await props.onDraftSubmitted?.(submission);
     } catch (error) {
       setDraftStatus(error instanceof Error ? error.message : "Не удалось сдать черновик.");
@@ -2008,6 +2304,8 @@ export function MultiLayerMapPanel(props: {
       return;
     }
     const activeDragOffset = tableDragOffset;
+    const draggedEl = draggedWindowElRef.current;
+    let latest = tableWindowPosition;
 
     function handlePointerMove(event: PointerEvent) {
       const panelRect = panelRef.current?.getBoundingClientRect();
@@ -2018,10 +2316,20 @@ export function MultiLayerMapPanel(props: {
       const maxY = Math.max(8, panelRect.height - 180);
       const nextX = Math.min(Math.max(8, event.clientX - panelRect.left - activeDragOffset.x), maxX);
       const nextY = Math.min(Math.max(54, event.clientY - panelRect.top - activeDragOffset.y), maxY);
-      setTableWindowPosition({ x: nextX, y: nextY });
+      latest = { x: nextX, y: nextY };
+      // Двигаем окно напрямую — без setState, иначе на каждый pointermove
+      // ререндерится вся панель с таблицей (тормоза до 3 fps).
+      if (draggedEl) {
+        draggedEl.style.left = `${nextX}px`;
+        draggedEl.style.top = `${nextY}px`;
+      } else {
+        setTableWindowPosition(latest);
+      }
     }
 
     function handlePointerUp() {
+      setTableWindowPosition(latest);
+      draggedWindowElRef.current = null;
       setTableDragOffset(null);
     }
 
@@ -2038,6 +2346,8 @@ export function MultiLayerMapPanel(props: {
       return;
     }
     const activeDragOffset = draftPropertiesDragOffset;
+    const draggedEl = draggedWindowElRef.current;
+    let latest = draftPropertiesPosition;
 
     function handlePointerMove(event: PointerEvent) {
       const panelRect = panelRef.current?.getBoundingClientRect();
@@ -2048,10 +2358,18 @@ export function MultiLayerMapPanel(props: {
       const maxY = Math.max(8, panelRect.height - 220);
       const nextX = Math.min(Math.max(8, event.clientX - panelRect.left - activeDragOffset.x), maxX);
       const nextY = Math.min(Math.max(54, event.clientY - panelRect.top - activeDragOffset.y), maxY);
-      setDraftPropertiesPosition({ x: nextX, y: nextY });
+      latest = { x: nextX, y: nextY };
+      if (draggedEl) {
+        draggedEl.style.left = `${nextX}px`;
+        draggedEl.style.top = `${nextY}px`;
+      } else {
+        setDraftPropertiesPosition(latest);
+      }
     }
 
     function handlePointerUp() {
+      setDraftPropertiesPosition(latest);
+      draggedWindowElRef.current = null;
       setDraftPropertiesDragOffset(null);
     }
 
@@ -2073,14 +2391,15 @@ export function MultiLayerMapPanel(props: {
       .slice()
       .reverse()
       .map((layer, index) => {
-        const layerStyle = normalizeLayerStyle(props.layerStyles[layer.asset.id], props.layers.findIndex((item) => item.asset.id === layer.asset.id));
+        const layerAssetId = layer.asset.id;
         const geoJsonFormat = new GeoJSON();
         const renderedFeatures = layer.preview.geojson.features.flatMap((geojsonFeature, featureIndex) => {
           if (!geojsonFeature.geometry) {
             return [];
           }
+          const featureForMap = geoJsonFeatureForMap(geojsonFeature);
           const features = geoJsonFormat.readFeatures(
-            { type: "FeatureCollection", features: [geojsonFeature] },
+            { type: "FeatureCollection", features: [featureForMap] },
             {
               dataProjection: "EPSG:4326",
               featureProjection: mapProjection,
@@ -2095,9 +2414,21 @@ export function MultiLayerMapPanel(props: {
         const vectorSource = new VectorSource({
           features: renderedFeatures,
         });
-        const vectorLayer = new VectorLayer({
+        const vectorLayer = new VectorImageLayer({
           source: vectorSource,
           style: (feature) => {
+            const sourceStyle = layerStylesRef.current[layerAssetId];
+            const cache = normalizedLayerStyleCacheRef.current;
+            let entry = cache[layerAssetId];
+            if (!entry || entry.source !== sourceStyle) {
+              const layerIndex = layersRef.current.findIndex((item) => item.asset.id === layerAssetId);
+              entry = {
+                source: sourceStyle,
+                normalized: normalizeLayerStyle(sourceStyle, layerIndex >= 0 ? layerIndex : index),
+              };
+              cache[layerAssetId] = entry;
+            }
+            const layerStyle = entry.normalized;
             const featureStyle = classifiedStyleForFeature(layerStyle, feature as Feature<Geometry>);
             const selected = selectedFeatureRef.current;
             const selectionKey = featureSelectionKey(
@@ -2151,7 +2482,6 @@ export function MultiLayerMapPanel(props: {
         projection: mapProjection,
         center: savedCenter ?? [0, 0],
         zoom: savedViewState?.zoom ?? 2,
-        extent: isRussiaExtentLocked ? russiaViewExtentForProjection(mapProjection) : undefined,
       }),
     });
     const middleButtonDragPan = new DragPan({ condition: middleMapButton });
@@ -2191,11 +2521,11 @@ export function MultiLayerMapPanel(props: {
         const sourceLayer = sourceLayerIndex >= 0 ? props.layers[sourceLayerIndex] : null;
         const sourceStyle =
           Number.isFinite(layerAssetId) && sourceLayerIndex >= 0
-            ? normalizeLayerStyle(props.layerStyles[layerAssetId], sourceLayerIndex)
+            ? normalizeLayerStyle(layerStylesRef.current[layerAssetId], sourceLayerIndex)
             : {
-                strokeColor: draftColor,
-                fillColor: draftColor,
-                fillOpacity: draftFillOpacity,
+                strokeColor: draftStyleRef.current.color,
+                fillColor: draftStyleRef.current.color,
+                fillOpacity: draftStyleRef.current.fillOpacity,
                 strokeWidth: 2,
                 pointRadius: 6,
                 lineStyle: null,
@@ -2270,6 +2600,24 @@ export function MultiLayerMapPanel(props: {
           extent[3] = Math.max(extent[3], layerExtent[3]);
         }
       });
+    }
+    // Обрезаем экстент рамкой России (та же, что у блокировки «РФ»): иначе один
+    // мультиполигон Чукотки, обёрнутый через 180°, раздувает bbox на весь мир и
+    // карта грузится на 1:144 млн. Для зума к конкретному слою не трогаем.
+    if (!focusedLayer && Number.isFinite(extent[0])) {
+      const russia = russiaFitExtentForProjection(mapProjection);
+      if (russia?.every(Number.isFinite)) {
+        const cx0 = Math.max(extent[0], russia[0]);
+        const cy0 = Math.max(extent[1], russia[1]);
+        const cx1 = Math.min(extent[2], russia[2]);
+        const cy1 = Math.min(extent[3], russia[3]);
+        if (cx0 < cx1 && cy0 < cy1) {
+          extent[0] = cx0;
+          extent[1] = cy0;
+          extent[2] = cx1;
+          extent[3] = cy1;
+        }
+      }
     }
     const zoomToLayerRequested = lastZoomToLayerTickRef.current !== props.zoomToLayerTick;
     const shouldAutoFit =
@@ -2377,13 +2725,9 @@ export function MultiLayerMapPanel(props: {
     };
   }, [
     props.layers,
-    props.layerStyles,
     props.zoomToLayerId,
     props.zoomToLayerTick,
     fitKey,
-    draftColor,
-    draftFillOpacity,
-    isRussiaExtentLocked,
     props.projectExtent3857,
     props.hideBasemap,
     basemapMode,
@@ -2478,7 +2822,13 @@ export function MultiLayerMapPanel(props: {
       line: "LineString",
       polygon: "Polygon",
     };
-    const drawType = drawTypeByMode[editMode];
+    const requestedDrawType = drawTypeByMode[editMode];
+    const lockedDrawType = lockedDrawTypeFromGeometry(lockGeometryType);
+    // Если у активного слоя задан конкретный тип геометрии — рисовать можно только им.
+    const drawType =
+      requestedDrawType && lockedDrawType && requestedDrawType !== lockedDrawType
+        ? undefined
+        : requestedDrawType;
 
     if (canEditActiveLayer) {
       map.addInteraction(selectDraft);
@@ -2534,26 +2884,50 @@ export function MultiLayerMapPanel(props: {
         type: "LineString",
         condition: primaryMapButton,
       });
+      // Обновляет длину и координаты начальной/конечной точек по линии замера.
+      const refreshMeasure = (geometry: LineString) => {
+        setMeasureDistanceText(formatDistanceMeters(getLength(geometry, { projection: mapProjection })));
+        const coordinates = geometry.getCoordinates();
+        if (coordinates.length >= 1) {
+          const start = coordinates[0];
+          const end = coordinates[coordinates.length - 1];
+          setMeasureEndpoints({
+            start: formatMapCoordinate(start, mapProjection, coordinateProjectionRef.current),
+            end: formatMapCoordinate(end, mapProjection, coordinateProjectionRef.current),
+          });
+        }
+      };
       measureDraw.on("drawstart", (event) => {
         measureSourceRef.current.clear();
         setMeasureDistanceText("0 м");
+        setMeasureEndpoints(null);
         const geometry = event.feature.getGeometry();
         geometry?.on("change", () => {
           if (geometry instanceof LineString) {
-            setMeasureDistanceText(formatDistanceMeters(getLength(geometry, { projection: mapProjection })));
+            refreshMeasure(geometry);
           }
         });
       });
       measureDraw.on("drawend", (event) => {
         const geometry = event.feature.getGeometry();
         if (geometry instanceof LineString) {
-          setMeasureDistanceText(formatDistanceMeters(getLength(geometry, { projection: mapProjection })));
+          refreshMeasure(geometry);
         }
+      });
+      // Esc (abortDrawing) — убираем недочерченную линию и подписи.
+      measureDraw.on("drawabort", () => {
+        measureSourceRef.current.clear();
+        setMeasureDistanceText("");
+        setMeasureEndpoints(null);
       });
       map.addInteraction(measureDraw);
     }
 
-    drawInteractionRef.current = draw;
+    // Хоткеи Enter/Esc работают через drawInteractionRef. В каждый момент активна
+    // либо рисовалка объектов (draw), либо линейка (measureDraw) — кладём ту, что есть,
+    // чтобы Enter «завершить» и Esc «прервать» работали и для линейки.
+    const activeDrawInteraction = draw ?? measureDraw;
+    drawInteractionRef.current = activeDrawInteraction;
 
     return () => {
       if (draw) {
@@ -2562,7 +2936,7 @@ export function MultiLayerMapPanel(props: {
       if (measureDraw) {
         map.removeInteraction(measureDraw);
       }
-      if (drawInteractionRef.current === draw) {
+      if (drawInteractionRef.current === activeDrawInteraction) {
         drawInteractionRef.current = null;
       }
       map.removeInteraction(selectDraft);
@@ -2576,6 +2950,7 @@ export function MultiLayerMapPanel(props: {
     props.activeEditableLayerId,
     props.activeEditableLayerName,
     props.layers,
+    lockGeometryType,
     draftFieldsText,
     mapProjection,
   ]);
@@ -2612,6 +2987,7 @@ export function MultiLayerMapPanel(props: {
         selectedFeatureCount={selectedFeatureKeys.size}
         isAiSegmenting={isAiSegmenting}
         editMode={editMode}
+        activeEditableLayerGeometryType={lockGeometryType}
         snapSettings={snapSettings}
         canUndoDraft={canUndoDraft}
         canRedoDraft={canRedoDraft}
@@ -2621,7 +2997,8 @@ export function MultiLayerMapPanel(props: {
         mapZoom={mapZoom}
         mapScaleText={mapScaleText}
         measureDistanceText={measureDistanceText}
-        isRussiaExtentLocked={isRussiaExtentLocked}
+        measureStartText={measureEndpoints?.start ?? ""}
+        measureEndText={measureEndpoints?.end ?? ""}
         coordinateProjection={coordinateProjection}
         coordinateProjections={props.coordinateProjections}
         cursorCoordinates={cursorCoordinates}
@@ -2658,6 +3035,7 @@ export function MultiLayerMapPanel(props: {
         onContinueSelectedDraftFeatureWithAi={() => void continueSelectedDraftFeatureWithAi()}
         onEditModeChange={setEditMode}
         onZoomToSelection={() => zoomToSelectedObject()}
+        onZoomToFullExtent={zoomToFullExtent}
         onDeleteSelectedDraftFeature={deleteSelectedDraftFeature}
         onClearDraftLayer={clearDraftLayer}
         onToggleSnapEnabled={() => setSnapSettings((current) => ({ ...current, enabled: !current.enabled }))}
@@ -2684,10 +3062,11 @@ export function MultiLayerMapPanel(props: {
         onLoadLatestDraft={() => void loadLatestDraft()}
         onSaveDraftLayer={() => void saveDraftLayer()}
         onSubmitDraftLayer={() => void submitDraftLayer()}
+        submitReportFileName={submitReportFile?.name ?? null}
+        onSubmitReportFileChange={setSubmitReportFile}
         onMapZoomChange={setMapZoomLevel}
         onMapScaleTextChange={setMapScaleText}
         onApplyMapScaleText={applyMapScaleText}
-        onToggleRussiaExtentLock={() => setIsRussiaExtentLocked((value) => !value)}
         onCoordinateProjectionChange={setCoordinateProjection}
       />
       {aiSuggestion ? (
@@ -2727,6 +3106,7 @@ export function MultiLayerMapPanel(props: {
           onFocus={() => props.onWindowFocus("draftProperties")}
           onDragStart={(event) => {
             props.onWindowFocus("draftProperties");
+            draggedWindowElRef.current = (event.currentTarget as HTMLElement).closest("section");
             setDraftPropertiesDragOffset({
               x: event.clientX - (panelRef.current?.getBoundingClientRect().left ?? 0) - draftPropertiesPosition.x,
               y: event.clientY - (panelRef.current?.getBoundingClientRect().top ?? 0) - draftPropertiesPosition.y,
@@ -2740,6 +3120,7 @@ export function MultiLayerMapPanel(props: {
           onDraftFillOpacityChange={setDraftFillOpacity}
           onNewDraftFieldNameChange={setNewDraftFieldName}
           onAddDraftField={addDraftField}
+          onAddDraftFieldWithType={addDraftFieldWithType}
           onRemoveDraftField={removeDraftField}
           onApplyDraftFieldsToFeatures={applyDraftFieldsToFeatures}
         />
@@ -2770,12 +3151,14 @@ export function MultiLayerMapPanel(props: {
           position={tableWindowPosition}
           zIndex={props.windowZIndexes.table}
           onFocus={() => props.onWindowFocus("table")}
+          onResizeCommit={setTableWindowPosition}
           onDragStart={(event) => {
             props.onWindowFocus("table");
             const panelRect = panelRef.current?.getBoundingClientRect();
             if (!panelRect) {
               return;
             }
+            draggedWindowElRef.current = (event.currentTarget as HTMLElement).closest("section");
             setTableDragOffset({
               x: event.clientX - panelRect.left - tableWindowPosition.x,
               y: event.clientY - panelRect.top - tableWindowPosition.y,
@@ -2800,12 +3183,14 @@ export function MultiLayerMapPanel(props: {
           position={tableWindowPosition}
           zIndex={props.windowZIndexes.table}
           onFocus={() => props.onWindowFocus("table")}
+          onResizeCommit={setTableWindowPosition}
           onDragStart={(event) => {
             props.onWindowFocus("table");
             const panelRect = panelRef.current?.getBoundingClientRect();
             if (!panelRect) {
               return;
             }
+            draggedWindowElRef.current = (event.currentTarget as HTMLElement).closest("section");
             setTableDragOffset({
               x: event.clientX - panelRect.left - tableWindowPosition.x,
               y: event.clientY - panelRect.top - tableWindowPosition.y,

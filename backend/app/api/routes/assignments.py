@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -10,12 +11,14 @@ from app.db.session import get_db
 from app.models.assignment import Assignment
 from app.models.assignment_material import AssignmentMaterial
 from app.models.course import Course, CourseMember
+from app.models.submission import Submission
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead
 from app.schemas.assignment_material import AssignmentMaterialRead
 from app.core.config import settings
 from app.services.storage import (
     build_assignment_material_storage_key,
+    delete_object,
     read_upload_bounded,
     upload_bytes,
     upload_fileobj_stream,
@@ -103,6 +106,45 @@ def _ensure_assignment_access(assignment: Assignment, user: User, db: Session) -
     raise HTTPException(status_code=403, detail="Assignment access denied")
 
 
+def _purge_expired_trashed_assignments(db: Session) -> None:
+    """Физически удаляет задания, пролежавшие в корзине дольше срока хранения
+    (вместе с их сдачами — каскад в БД). Best-effort: вызывается при листинге,
+    чтобы корзина чистилась даже когда фоновый worker недоступен."""
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            days=settings.assignment_trash_retention_days
+        )
+        expired = (
+            db.query(Assignment)
+            .filter(Assignment.deleted_at.isnot(None), Assignment.deleted_at < cutoff)
+            .all()
+        )
+        if not expired:
+            return
+        for assignment in expired:
+            db.delete(assignment)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def _student_latest_review_status(db: Session, student_id: int) -> dict[int, str]:
+    """Статус последней сдачи студента по каждому заданию (для разделения списка
+    на «К выполнению» и «Выполненные»). Значения: pending / returned / accepted.
+    Задания без сдачи в карте отсутствуют."""
+    rows = (
+        db.query(Submission.assignment_id, Submission.review_status)
+        .filter(Submission.student_id == student_id)
+        .order_by(Submission.assignment_id, Submission.id.desc())
+        .all()
+    )
+    latest_by_assignment: dict[int, str] = {}
+    for assignment_id, review_status in rows:
+        if assignment_id not in latest_by_assignment:
+            latest_by_assignment[assignment_id] = review_status or "pending"
+    return latest_by_assignment
+
+
 def _to_material_read(material: AssignmentMaterial) -> AssignmentMaterialRead:
     return AssignmentMaterialRead(
         id=material.id,
@@ -122,9 +164,15 @@ def _to_material_read(material: AssignmentMaterial) -> AssignmentMaterialRead:
 @router.get("/", response_model=list[AssignmentRead])
 def list_assignments(
     course_id: int | None = Query(default=None),
+    trashed: bool = Query(default=False, description="Показать корзину (только преподавателю)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _purge_expired_trashed_assignments(db)
+
+    if trashed and current_user.role == "student":
+        raise HTTPException(status_code=403, detail="Trash is available to teachers only")
+
     query = db.query(Assignment)
 
     if course_id is not None:
@@ -159,7 +207,26 @@ def list_assignments(
         )
         query = query.filter(or_(Assignment.course_id.in_(member_course_ids), Assignment.course_id.is_(None)))
 
+    # Корзина vs активные задания.
+    if trashed:
+        query = query.filter(Assignment.deleted_at.isnot(None))
+    else:
+        query = query.filter(Assignment.deleted_at.is_(None))
+
     assignments = query.order_by(Assignment.id.desc()).all()
+
+    # Для студента к каждому заданию добавляем статус его последней сдачи —
+    # фронт делит список на «К выполнению» и «Выполненные». Сданные задания
+    # больше не скрываются: returned остаётся в «К выполнению», pending/accepted
+    # уходит в «Выполненные».
+    status_map = (
+        _student_latest_review_status(db, current_user.id)
+        if current_user.role == "student" and not trashed
+        else {}
+    )
+    for assignment in assignments:
+        assignment.my_submission_status = status_map.get(assignment.id)
+
     return assignments
 
 
@@ -182,6 +249,46 @@ def create_assignment(
         description=payload.description,
     )
     db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """Мягкое удаление: задание уходит в корзину (скрывается у всех). Сдачи и
+    оценки сохраняются. Восстановить можно через `/restore` в течение срока
+    хранения; затем фоновая задача удалит его физически."""
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if not _can_manage_assignment(assignment, current_user, db):
+        raise HTTPException(status_code=403, detail="Assignment manager role required")
+
+    if assignment.deleted_at is None:
+        assignment.deleted_at = datetime.now(timezone.utc)
+        db.commit()
+    return None
+
+
+@router.post("/{assignment_id}/restore", response_model=AssignmentRead)
+def restore_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """Возврат задания из корзины обратно в активные."""
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if not _can_manage_assignment(assignment, current_user, db):
+        raise HTTPException(status_code=403, detail="Assignment manager role required")
+
+    assignment.deleted_at = None
     db.commit()
     db.refresh(assignment)
     return assignment
@@ -374,3 +481,36 @@ def upload_assignment_material(
     for material in materials_to_create:
         db.refresh(material)
     return [_to_material_read(material) for material in materials_to_create]
+
+
+@router.delete("/{assignment_id}/materials/{material_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_assignment_material(
+    assignment_id: int,
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """Удаляет один исходный материал задания (если загрузили лишнее/не то).
+    Доступно только управляющему заданием — преподавателю-владельцу или админу."""
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if not _can_manage_assignment(assignment, current_user, db):
+        raise HTTPException(status_code=403, detail="Assignment manager role required")
+
+    material = (
+        db.query(AssignmentMaterial)
+        .filter(
+            AssignmentMaterial.id == material_id,
+            AssignmentMaterial.assignment_id == assignment_id,
+        )
+        .first()
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    storage_key = material.storage_key
+    db.delete(material)
+    db.commit()
+    delete_object(storage_key)
+    return None

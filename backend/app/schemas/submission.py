@@ -12,6 +12,8 @@ class SubmissionRead(BaseModel):
     content_type: str | None = None
     size_bytes: int
     status: str
+    review_status: str = "pending"
+    review_comment: str | None = None
     created_at: datetime
     download_url: str
 

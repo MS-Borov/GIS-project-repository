@@ -6,7 +6,7 @@ import "./AppRoot.css";
 import type { LayerStyleSettings } from "../features/map/layerStyles";
 import { RequirementsEditor } from "../features/requirements/RequirementsEditor";
 import { SubmissionPanel } from "../features/submissions/SubmissionPanel";
-import { AssignmentOverview, ClassStream, CourseHeader, PeoplePanel } from "../features/course/CoursePanels";
+import { AssignmentOverview, ClassStream, CourseHeader, PeoplePanel, TrashPanel } from "../features/course/CoursePanels";
 import { LayerWorkspace } from "../features/map/LayerWorkspace";
 import { MAP_COORDINATE_PROJECTIONS } from "../features/map/mapWorkspaceUtils";
 import type { LayerStyleManifest } from "../features/map/mapWorkspaceUtils";
@@ -17,7 +17,7 @@ import { UserProfileMenu } from "../features/profile/UserProfileMenu";
 
 type UserRole = "admin" | "teacher" | "student";
 type AuthMode = "login" | "register";
-type CourseTab = "stream" | "assignments" | "submissions" | "layers" | "requirements" | "people";
+type CourseTab = "stream" | "assignments" | "submissions" | "layers" | "requirements" | "people" | "trash";
 type ThemeMode = "light" | "dark";
 type Course = {
   id: number;
@@ -67,6 +67,8 @@ type Assignment = {
   course_id?: number | null;
   title: string;
   description?: string | null;
+  deleted_at?: string | null;
+  my_submission_status?: string | null;
 };
 
 type Submission = {
@@ -75,6 +77,8 @@ type Submission = {
   student_id?: number | null;
   original_filename: string;
   status: string;
+  review_status?: string;
+  review_comment?: string | null;
   size_bytes: number;
   created_at: string;
   download_url: string;
@@ -233,7 +237,7 @@ const THEME_STORAGE_KEY = "gis_edu_theme";
 const RESEND_COOLDOWN_SECONDS = 60;
 const ARCHIVE_PREVIEW_STORAGE_PREFIX = "gis_edu_archive_preview:";
 const RUSSIA_PREVIEW_BBOX = "19,41,180,82";
-const RUSSIA_PREVIEW_QUERY = `bbox=${encodeURIComponent(RUSSIA_PREVIEW_BBOX)}&clip_boundary=russia`;
+const RUSSIA_PREVIEW_QUERY = `bbox=${encodeURIComponent(RUSSIA_PREVIEW_BBOX)}`;
 const emptyRequirements: Requirements = {
   source_doc_name: null,
   source_text: null,
@@ -480,6 +484,7 @@ function App() {
   const [memberRole, setMemberRole] = useState<"student" | "teacher">("student");
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [trashedAssignments, setTrashedAssignments] = useState<Assignment[]>([]);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
   const [newAssignmentTitle, setNewAssignmentTitle] = useState("");
   const [newAssignmentDescription, setNewAssignmentDescription] = useState("");
@@ -988,8 +993,112 @@ function App() {
       if ((!selectedAssignmentId || courseId !== selectedCourseId) && data[0]) {
         setSelectedAssignmentId(data[0].id);
       }
+      void loadTrashedAssignments(token, courseId);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить задания.");
+    }
+  }
+
+  async function loadTrashedAssignments(token = authToken, courseId = selectedCourseId) {
+    if (!token || !canEditRequirements) {
+      return;
+    }
+    try {
+      const query = courseId ? `?trashed=true&course_id=${courseId}` : "?trashed=true";
+      const data = await fetchJson<Assignment[]>(`/assignments/${query}`, {}, token);
+      setTrashedAssignments(data);
+    } catch {
+      // Корзина — вспомогательная панель: молча игнорируем сбой её загрузки,
+      // чтобы не мешать основному списку заданий.
+    }
+  }
+
+  async function deleteAssignment(assignmentId: number) {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await fetchJson<void>(`/assignments/${assignmentId}`, { method: "DELETE" });
+      if (selectedAssignmentId === assignmentId) {
+        setSelectedAssignmentId(null);
+      }
+      await loadAssignments();
+      await loadTrashedAssignments();
+      setStatusMessage("Задание перемещено в корзину. Восстановить можно в течение недели.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить задание.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function restoreAssignment(assignmentId: number) {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await fetchJson<Assignment>(`/assignments/${assignmentId}/restore`, { method: "POST" });
+      await loadAssignments();
+      await loadTrashedAssignments();
+      setStatusMessage("Задание восстановлено из корзины.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось восстановить задание.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function reviewSubmission(
+    submissionId: number,
+    decision: "returned" | "accepted" | "pending",
+    comment?: string,
+  ) {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await fetchJson<Submission>(`/submissions/${submissionId}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, comment: comment ?? null }),
+      });
+      await loadSubmissions();
+      if (selectedSubmissionId === submissionId) {
+        await loadSubmissionDetails(submissionId);
+      }
+      setStatusMessage(
+        decision === "returned"
+          ? "Работа возвращена студенту на переделку."
+          : decision === "accepted"
+            ? "Работа принята."
+            : "Решение по работе снято.",
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось обновить статус сдачи.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function renameSubmission(submissionId: number, filename: string) {
+    const name = filename.trim();
+    if (!name) {
+      return;
+    }
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      await fetchJson<Submission>(`/submissions/${submissionId}/rename`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: name }),
+      });
+      await loadSubmissions();
+      if (selectedSubmissionId === submissionId) {
+        await loadSubmissionDetails(submissionId);
+      }
+      setStatusMessage("Файл сдачи переименован.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось переименовать сдачу.");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -1077,9 +1186,14 @@ function App() {
       setSubmissionArchiveFile(null);
       setSubmissionReportFile(null);
       setSelectedSubmissionId(submission.id);
-      setStatusMessage(`Работа «${submission.original_filename}» загружена и проверена.`);
+      setStatusMessage(`Работа «${submission.original_filename}» отправлена на проверку.`);
       await loadSubmissions();
       await loadSubmissionDetails(submission.id);
+      // После сдачи задание переходит из «К выполнению» в «Выполненные»
+      // (вернётся в активные, если препод отправит на переделку). Обновляем
+      // список заданий и показываем сдачи.
+      await loadAssignments();
+      setActiveTab("submissions");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить работу.");
     } finally {
@@ -1440,6 +1554,7 @@ function App() {
                 courses={activeCourses}
                 selectedCourseId={selectedCourseId}
                 assignments={assignments}
+                trashedAssignments={trashedAssignments}
                 selectedAssignment={selectedAssignment}
                 selectedAssignmentId={selectedAssignmentId}
                 newAssignmentTitle={newAssignmentTitle}
@@ -1470,6 +1585,10 @@ function App() {
                 onAssignmentSelect={(id) => void selectAssignment(id)}
                 onAssignmentsReload={() => void loadAssignments()}
                 onCreateAssignment={() => void createAssignment()}
+                onDeleteAssignment={(id) => void deleteAssignment(id)}
+                onRestoreAssignment={(id) => void restoreAssignment(id)}
+                onReviewSubmission={(id, decision, comment) => void reviewSubmission(id, decision, comment)}
+                onRenameSubmission={(id, name) => void renameSubmission(id, name)}
                 onTitleChange={setNewAssignmentTitle}
                 onDescriptionChange={setNewAssignmentDescription}
                 onLoadRequirements={() => void loadRequirements()}
@@ -1542,6 +1661,7 @@ function App() {
                 onLoadAssetPreview={(id) => void loadAssetGeojsonPreview(id)}
                 onFetchAssetPreview={fetchAssetGeojsonPreview}
                 onMapFeatureSelect={setSelectedMapFeatureIndex}
+                onRenameSubmission={(id, name) => void renameSubmission(id, name)}
                 onPreviewReport={setReportPreviewSource}
               />
             ) : null}
@@ -1866,6 +1986,7 @@ function TeacherWorkspace(props: {
   courses: Course[];
   selectedCourseId: number | null;
   assignments: Assignment[];
+  trashedAssignments: Assignment[];
   selectedAssignment: Assignment | null;
   selectedAssignmentId: number | null;
   newAssignmentTitle: string;
@@ -1896,6 +2017,10 @@ function TeacherWorkspace(props: {
   onAssignmentSelect: (id: number) => void;
   onAssignmentsReload: () => void;
   onCreateAssignment: () => void;
+  onDeleteAssignment: (id: number) => void;
+  onRestoreAssignment: (id: number) => void;
+  onReviewSubmission: (id: number, decision: "returned" | "accepted" | "pending", comment?: string) => void;
+  onRenameSubmission: (id: number, filename: string) => void;
   onTitleChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onLoadRequirements: () => void;
@@ -1931,6 +2056,7 @@ function TeacherWorkspace(props: {
           selectedAssignment={props.selectedAssignment}
           assignmentsCount={props.assignments.length}
           submissionsCount={props.submissions.length}
+          trashedCount={props.trashedAssignments.length}
           activeTab={props.activeTab}
           onTabChange={props.onTabChange}
         />
@@ -1951,6 +2077,7 @@ function TeacherWorkspace(props: {
               assignments={props.assignments}
               selectedAssignmentId={props.selectedAssignmentId}
               onAssignmentSelect={props.onAssignmentSelect}
+              onDeleteAssignment={props.onDeleteAssignment}
               isLoading={props.isLoading}
             />
             <section className="section-panel">
@@ -1985,11 +2112,27 @@ function TeacherWorkspace(props: {
           <RequirementsEditor {...props} />
         ) : null}
 
+        {props.activeTab === "trash" ? (
+          <TrashPanel
+            trashedAssignments={props.trashedAssignments}
+            isLoading={props.isLoading}
+            onRestoreAssignment={props.onRestoreAssignment}
+            onRefresh={props.onAssignmentsReload}
+          />
+        ) : null}
+
         {props.activeTab === "submissions" && props.selectedAssignmentId ? (
           <SubmissionPanel
             {...props}
             mode="teacher"
             onRefresh={props.onLoadSubmissions}
+            onReviewSubmission={props.onReviewSubmission}
+            onRenameSubmission={props.onRenameSubmission}
+            onDownloadSubmission={(submission) =>
+              void downloadAuthorizedFile(`/downloads/submissions/${submission.id}`, submission.original_filename).catch(
+                (error) => alert(error instanceof Error ? error.message : String(error)),
+              )
+            }
             onPreviewReport={(asset) => props.onPreviewReport({ kind: "asset", assetId: asset.id, name: asset.asset_name })}
           />
         ) : null}
@@ -2055,6 +2198,7 @@ function StudentWorkspace(props: {
   onFetchAssetPreview: (assetId: number) => Promise<GeoJsonPreview>;
   onMapFeatureSelect: (index: number | null) => void;
   onDraftSubmitted?: (submission: Submission) => void | Promise<void>;
+  onRenameSubmission: (id: number, filename: string) => void;
   onPreviewReport: (source: ReportPreviewSource) => void;
 }) {
   return (
@@ -2172,6 +2316,7 @@ function StudentWorkspace(props: {
 function AssignmentMaterialsList(props: {
   materials: AssignmentMaterial[];
   emptyMessage?: string;
+  onDelete?: (material: AssignmentMaterial) => void;
 }) {
   if (props.materials.length === 0) {
     return <p className="muted">{props.emptyMessage ?? "Материалов пока нет."}</p>;
@@ -2186,34 +2331,61 @@ function AssignmentMaterialsList(props: {
               {formatDetectedFormat(material.detected_format)} · {statusLabel(material.status)}
             </span>
           </div>
-          {material.download_url ? (
-            <button
-              className="icon-button"
-              title={`Скачать ${material.material_name}`}
-              aria-label={`Скачать ${material.material_name}`}
-              onClick={() => {
-                void downloadAuthorizedFile(material.download_url!, material.material_name).catch(
-                  (error) => alert(error instanceof Error ? error.message : String(error)),
-                );
-              }}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+          <div className="material-row-actions">
+            {material.download_url ? (
+              <button
+                className="material-download-icon"
+                title={`Скачать ${material.material_name}`}
+                aria-label={`Скачать ${material.material_name}`}
+                onClick={() => {
+                  void downloadAuthorizedFile(material.download_url!, material.material_name).catch(
+                    (error) => alert(error instanceof Error ? error.message : String(error)),
+                  );
+                }}
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
-          ) : null}
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+            ) : null}
+            {props.onDelete ? (
+              <button
+                className="material-delete-icon"
+                title={`Удалить ${material.material_name}`}
+                aria-label={`Удалить ${material.material_name}`}
+                onClick={() => props.onDelete!(material)}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>
@@ -2287,6 +2459,24 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
     }
   }
 
+  async function deleteMaterial(material: AssignmentMaterial) {
+    if (!window.confirm(`Удалить материал «${material.material_name}»? Действие необратимо.`)) {
+      return;
+    }
+    setIsBusy(true);
+    try {
+      await storedAuthFetchJson<void>(
+        `/assignments/${props.assignment.id}/materials/${material.id}`,
+        { method: "DELETE" },
+      );
+      await loadMaterials();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось удалить материал.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   useEffect(() => {
     void loadMaterials();
   }, [props.assignment.id]);
@@ -2331,7 +2521,7 @@ function AssignmentMaterialsBox(props: { assignment: Assignment }) {
         </p>
       ) : null}
       <p className="muted">{message}</p>
-      <AssignmentMaterialsList materials={materials} />
+      <AssignmentMaterialsList materials={materials} onDelete={(material) => void deleteMaterial(material)} />
     </section>
   );
 }

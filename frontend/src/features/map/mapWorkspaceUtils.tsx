@@ -61,12 +61,15 @@ export type QgisProjectLayer = {
   source_basename?: string | null;
   visible?: boolean;
   order?: number;
+  group_name?: string | null;
+  group_path?: string[];
   style?: Partial<LayerStyleSettings> | null;
 };
 
 export type QgisProjectMetadata = {
   project_name?: string | null;
   source?: string | null;
+  crs?: string | null;
   hide_basemap?: boolean;
   background?: string | null;
   extent?: {
@@ -107,12 +110,13 @@ export type ArchivePreviewResponse = {
 };
 
 export type LayerStyleManifestLayer = {
-  source_layer_id?: number | null;
+  source_layer_id?: string | number | null;
   source_layer_name?: string | null;
   asset_name?: string | null;
   export_stem?: string | null;
   alias?: string | null;
   group_name?: string | null;
+  group_path?: string[];
   style?: Partial<LayerStyleSettings> | null;
 };
 
@@ -140,19 +144,19 @@ export const ARCHIVE_PREVIEW_STORAGE_PREFIX = "gis_edu_archive_preview:";
 export const REPORT_PREVIEW_STORAGE_PREFIX = "gis_edu_report_preview:";
 export const SHAPEFILE_PART_EXTENSIONS = new Set([".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".sbn", ".sbx"]);
 export const RUSSIA_PREVIEW_BBOX = "19,41,180,82";
-export const RUSSIA_PREVIEW_QUERY = `bbox=${encodeURIComponent(RUSSIA_PREVIEW_BBOX)}&clip_boundary=russia`;
+export const RUSSIA_PREVIEW_QUERY = `bbox=${encodeURIComponent(RUSSIA_PREVIEW_BBOX)}`;
 export const DEFAULT_LAYER_GROUP = "Слои";
 export const LOCAL_LAYER_GROUP = "Локальные слои";
 
-const WGS84_UTM_NORTH_PROJECTIONS = Array.from({ length: 10 }, (_, index) => {
-  const zone = 35 + index;
+const WGS84_UTM_NORTH_PROJECTIONS = Array.from({ length: 27 }, (_, index) => {
+  const zone = 34 + index;
   return {
     code: `EPSG:${32600 + zone}`,
     label: `EPSG:${32600 + zone} WGS 84 / UTM zone ${zone}N`,
   };
 });
 
-const PULKOVO_1942_GAUSS_KRUGER_PROJECTIONS = Array.from({ length: 22 }, (_, index) => {
+const PULKOVO_1942_GAUSS_KRUGER_PROJECTIONS = Array.from({ length: 28 }, (_, index) => {
   const zone = 3 + index;
   const epsg = 28400 + zone;
   const lon0 = zone * 6 - 3;
@@ -166,6 +170,11 @@ const PULKOVO_1942_GAUSS_KRUGER_PROJECTIONS = Array.from({ length: 22 }, (_, ind
 export const MAP_COORDINATE_PROJECTIONS: Array<{ code: CoordinateProjectionCode; label: string; definition?: string }> = [
   { code: "EPSG:4326", label: "EPSG:4326 WGS 84, градусы" },
   { code: "EPSG:3857", label: "EPSG:3857 Web Mercator, метры" },
+  {
+    code: "EPSG:4284",
+    label: "EPSG:4284 Pulkovo 1942, градусы",
+    definition: "+proj=longlat +ellps=krass +towgs84=23.92,-141.27,-80.9,0,0.35,0.82,-0.12 +no_defs +type=crs",
+  },
   ...WGS84_UTM_NORTH_PROJECTIONS,
   ...PULKOVO_1942_GAUSS_KRUGER_PROJECTIONS,
 ];
@@ -240,7 +249,11 @@ export function qgisProjectExtent3857(project: QgisProjectMetadata | null | unde
   if (!values.every(Number.isFinite)) {
     return null;
   }
-  return transformExtent(values, extent.crs || "EPSG:4326", "EPSG:3857");
+  try {
+    return transformExtent(values, extent.crs || "EPSG:4326", "EPSG:3857");
+  } catch {
+    return null;
+  }
 }
 
 export function fileExtension(filename: string) {
@@ -365,3 +378,4 @@ export function ThemeIconButton(props: { themeMode: ThemeMode; onToggle: () => v
     </button>
   );
 }
+

@@ -73,6 +73,18 @@ def upload_bytes(object_key: str, data: bytes, content_type: str | None = None) 
     return object_key
 
 
+def delete_object(object_key: str) -> None:
+    """Удаляет объект из S3 по ключу. Отсутствие объекта не считается ошибкой —
+    запись в БД всё равно убираем."""
+    if not object_key:
+        return
+    client = get_s3_client()
+    try:
+        client.delete_object(Bucket=settings.s3_bucket_name, Key=object_key)
+    except ClientError:
+        pass
+
+
 def upload_fileobj_stream(
     object_key: str,
     file_obj,

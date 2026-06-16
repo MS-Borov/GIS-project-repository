@@ -1,3 +1,4 @@
+
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -153,7 +154,7 @@ services:
       - ./backend:/app
       - backend_uploads:/app/uploads
     command: >
-      sh -c "taskiq worker app.tasks.broker:broker"
+      sh -c "taskiq scheduler app.tasks.broker:scheduler & taskiq worker app.tasks.broker:broker"
 
   ai-digitizer:
     build:
@@ -163,7 +164,6 @@ services:
         TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}
     container_name: gis-ai-digitizer-dev
     restart: unless-stopped
-    gpus: all
     environment:
       AI_DIGITIZER_BACKEND: ${AI_DIGITIZER_BACKEND:-prompt-ml}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
@@ -246,3 +246,8 @@ volumes:
   redis_data:
   minio_data:
   backend_uploads:
+
+
+
+
+      

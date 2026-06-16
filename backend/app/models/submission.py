@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import ForeignKey, String, BigInteger, DateTime
+from sqlalchemy import ForeignKey, String, BigInteger, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -28,6 +28,15 @@ class Submission(Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="uploaded")
+
+    # Решение преподавателя по сдаче (отдельно от авто-проверки `status`):
+    #   pending  — сдано, ждёт проверки (по умолчанию);
+    #   returned — возвращено студенту на переделку (задание снова видно у студента);
+    #   accepted — принято преподавателем.
+    review_status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
+
+    # Комментарий преподавателя к сдаче (замечания, что исправить при возврате).
+    review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -1073,29 +1073,25 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
-.icon-button {
+.material-download-icon {
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  width: 30px;
-  height: 30px;
+  border: none;
+  padding: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   color: #176f6b;
   flex-shrink: 0;
-  padding: 0;
+  border-radius: 4px;
   transition: color 120ms ease;
 }
 
-.icon-button:hover {
-  background: transparent;
-  border-color: transparent;
-  color: #0f5653;
+.material-download-icon:hover {
+  color: #0f5048;
 }
 
-.icon-button:disabled {
+.material-download-icon:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -1109,16 +1105,50 @@ textarea:focus {
   color: #a9bcc7;
 }
 
-:root[data-theme="dark"] .icon-button {
-  background: transparent;
-  border-color: transparent;
+:root[data-theme="dark"] .material-download-icon {
   color: #6acec9;
 }
 
-:root[data-theme="dark"] .icon-button:hover {
+:root[data-theme="dark"] .material-download-icon:hover {
+  color: #9ee5e0;
+}
+
+.material-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.material-delete-icon {
   background: transparent;
-  border-color: transparent;
-  color: #9ed9ff;
+  border: none;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8a99a3;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: color 120ms ease;
+}
+
+.material-delete-icon:hover {
+  color: #c0392b;
+}
+
+.material-delete-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+:root[data-theme="dark"] .material-delete-icon {
+  color: #8aa0ac;
+}
+
+:root[data-theme="dark"] .material-delete-icon:hover {
+  color: #ff6b5e;
 }
 
 .upload-row label {
@@ -1171,6 +1201,52 @@ textarea:focus {
 .muted {
   color: #60717d;
   font-size: 13px;
+}
+
+.submission-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.submission-row .list-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.submission-download-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #dbe2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #176f6b;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.submission-download-icon:hover {
+  color: #0f5048;
+  border-color: #176f6b;
+}
+
+.submission-download-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+:root[data-theme="dark"] .submission-download-icon {
+  border-color: #304451;
+  color: #6acec9;
+}
+
+:root[data-theme="dark"] .submission-download-icon:hover {
+  color: #9ee5e0;
+  border-color: #6acec9;
 }
 
 .content-grid {
@@ -1277,6 +1353,88 @@ textarea:focus {
   color: #ffffff;
 }
 
+/* Угловое действие у карточки задания (иконка «удалить» у преподавателя). */
+.classwork-item.has-corner-actions {
+  position: relative;
+}
+
+.classwork-item.has-corner-actions .classwork-main {
+  padding-right: 44px;
+}
+
+.classwork-corner-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.classwork-corner-actions .icon-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+}
+
+.icon-button.danger {
+  color: #b4232a;
+}
+
+.icon-button.danger:hover {
+  background: #fbe9ea;
+}
+
+:root[data-theme="dark"] .icon-button.danger {
+  color: #ff9b9b;
+}
+
+:root[data-theme="dark"] .icon-button.danger:hover {
+  background: #3a2326;
+}
+
+/* Корзина удалённых заданий — строки на всю ширину. */
+.trash-list {
+  display: grid;
+  gap: 8px;
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #dbe2e6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px 14px;
+}
+
+.trash-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trash-row-main strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.trash-row-main span {
+  color: #60717d;
+  font-size: 13px;
+}
+
+:root[data-theme="dark"] .trash-row {
+  border-color: #304451;
+  background: #112c32;
+}
+
+:root[data-theme="dark"] .trash-row-main span {
+  color: #a9bcc7;
+}
+
 .submission-layout {
   display: grid;
   gap: 16px;
@@ -1296,6 +1454,168 @@ textarea:focus {
   border-radius: 8px;
   background: #f1f8f7;
   padding: 12px;
+}
+
+/* Блок решения преподавателя (комментарий + кнопки) и статус для студента. */
+.review-decision-box,
+.student-review-status {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbe2e6;
+  border-radius: 8px;
+  background: #f7fafb;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.review-decision-box h3 {
+  margin: 0;
+}
+
+.review-comment-label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: #60717d;
+}
+
+.review-comment-label textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
+
+.review-comment-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.student-review-status.review-returned {
+  border-color: #c77326;
+  background: #fdf3e9;
+}
+
+.student-review-status.review-accepted {
+  border-color: #176f6b;
+  background: #eef8f7;
+}
+
+:root[data-theme="dark"] .review-decision-box,
+:root[data-theme="dark"] .student-review-status {
+  border-color: #304451;
+  background: #112c32;
+}
+
+/* Разделение списка заданий у студента: «К выполнению» / «Выполненные». */
+.assignment-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #dbe2e6;
+  padding-bottom: 6px;
+  margin: 16px 0 8px;
+}
+
+.assignment-group-heading:first-of-type {
+  margin-top: 6px;
+}
+
+.assignment-group-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.assignment-group-heading span {
+  color: #60717d;
+  font-size: 13px;
+}
+
+.assignment-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.assignment-badge.badge-pending {
+  background: #eef4f7;
+  color: #3a5566;
+  border-color: #c4d4dc;
+}
+
+.assignment-badge.badge-accepted {
+  background: #eef8f7;
+  color: #176f6b;
+  border-color: #9fbfbb;
+}
+
+.assignment-badge.badge-returned {
+  background: #fdf3e9;
+  color: #b4561c;
+  border-color: #e6c39c;
+}
+
+/* Вкладки заданий у студента: «Назначенные» / «Выполненные». */
+.assignment-subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #dbe2e6;
+  margin: 4px 0 12px;
+}
+
+.assignment-subtabs button {
+  border: 0;
+  background: transparent;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #60717d;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.assignment-subtabs button:hover {
+  color: #243640;
+}
+
+.assignment-subtabs button.active {
+  color: #176f6b;
+  border-bottom-color: #176f6b;
+}
+
+.assignment-subtabs .subtab-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #60717d;
+  background: #eef4f7;
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.assignment-subtabs button.active .subtab-count {
+  background: #d8efed;
+  color: #176f6b;
+}
+
+:root[data-theme="dark"] .assignment-subtabs {
+  border-color: #304451;
+}
+
+:root[data-theme="dark"] .assignment-subtabs button.active {
+  color: #7ed5cc;
+  border-bottom-color: #7ed5cc;
+}
+
+:root[data-theme="dark"] .assignment-subtabs .subtab-count {
+  background: #223741;
+  color: #a9bcc7;
 }
 
 .review-heading {
@@ -1975,6 +2295,45 @@ h3 {
   line-height: 1;
 }
 
+/* Прикрепление отчёта к «Сдать» — label с файловым input, стилизован как кнопка. */
+.map-edit-toolbar .report-attach {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid #aebdc5;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243640;
+  cursor: pointer;
+}
+
+.map-edit-toolbar .report-attach:hover {
+  border-color: #176f6b;
+}
+
+.map-edit-toolbar .report-attach.has-file {
+  border-color: #176f6b;
+  background: #eef8f7;
+  color: #176f6b;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .map-edit-toolbar .report-attach {
+  border-color: #355865;
+  background: #112c32;
+  color: #e7eef2;
+}
+
+:root[data-theme="dark"] .map-edit-toolbar .report-attach.has-file {
+  border-color: #7ed5cc;
+  background: #14333a;
+  color: #9ed9ff;
+}
+
 .map-edit-toolbar button[data-tooltip]::after,
 .feature-table-toolbar button[data-tooltip]::after {
   position: absolute;
@@ -2123,12 +2482,22 @@ h3 {
 }
 
 .map-edit-toolbar .measure-output {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
   border: 1px solid #7db8b2;
   border-radius: 6px;
   background: rgba(23, 111, 107, 0.12);
   color: #0f4f49;
   padding: 7px 10px;
   font-weight: 800;
+}
+
+.map-edit-toolbar .measure-output .measure-point {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.92;
 }
 
 .draft-status {
@@ -2912,15 +3281,83 @@ h3 {
 .feature-table-window {
   position: absolute;
   z-index: 10;
-  display: grid;
-  gap: 0;
-  width: min(980px, calc(100% - 36px));
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100% - 36px));
   max-width: calc(100% - 36px);
+  height: 340px;
+  min-width: 300px;
+  min-height: 180px;
+  max-height: calc(100% - 70px);
   border: 1px solid #dbe2e6;
   border-radius: 8px;
   background: #ffffff;
   overflow: hidden;
+  /* Окно тянется за любую сторону и любой угол — ручки .window-resize-* внутри. */
   box-shadow: 0 14px 36px rgba(31, 45, 55, 0.2);
+}
+
+/* Ручки изменения размера окна (4 стороны + 4 угла). */
+.window-resize-handle {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+}
+.window-resize-n {
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.window-resize-s {
+  bottom: 0;
+  left: 14px;
+  right: 14px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.window-resize-e {
+  top: 14px;
+  bottom: 14px;
+  right: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+.window-resize-w {
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+.window-resize-ne {
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
+}
+.window-resize-nw {
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+.window-resize-se {
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+.window-resize-sw {
+  bottom: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
 }
 
 .draft-feature-table-window {
@@ -2936,13 +3373,20 @@ h3 {
   cursor: move;
   border-bottom: 1px solid #dbe2e6;
   background: #f8fafb;
-  padding: 10px 12px;
+  padding: 5px 12px;
   user-select: none;
+}
+
+.feature-table-heading .eyebrow {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .feature-table-heading h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1.25;
 }
 
 .feature-table-heading span {
@@ -2957,8 +3401,8 @@ h3 {
 }
 
 .feature-table-actions button {
-  width: 30px;
-  min-height: 30px;
+  width: 28px;
+  min-height: 28px;
   padding: 0;
   font-size: 20px;
   line-height: 1;
@@ -2969,30 +3413,38 @@ h3 {
   gap: 8px;
   border-bottom: 1px solid #edf1f3;
   background: #ffffff;
-  padding: 8px 10px;
+  padding: 5px 10px;
 }
 
 .feature-table-field-add input {
   flex: 1;
   min-width: 160px;
-  min-height: 34px;
+  min-height: 30px;
   border: 1px solid #c5d1d8;
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 5px 10px;
 }
 
 .feature-table-field-add button {
-  min-height: 34px;
+  min-height: 30px;
 }
 
 .feature-table-field-add.compact {
-  padding: 6px 8px;
+  padding: 3px 8px;
+  gap: 6px;
 }
 
 .feature-table-field-add.compact input,
 .feature-table-field-add.compact select,
 .feature-table-field-add.compact button {
-  min-height: 30px;
+  min-height: 24px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 13px;
+}
+
+.feature-table-field-add.compact button {
+  white-space: nowrap;
 }
 
 .feature-table-toolbar {
@@ -3002,11 +3454,11 @@ h3 {
   gap: 10px;
   border-bottom: 1px solid #cfd9df;
   background: #eef4f5;
-  padding: 7px 10px;
+  padding: 4px 10px;
 }
 
 .feature-table-toolbar.compact {
-  padding: 5px 8px;
+  padding: 3px 8px;
 }
 
 .feature-table-tool-group {
@@ -3019,8 +3471,8 @@ h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  min-height: 30px;
+  width: 28px;
+  min-height: 28px;
   padding: 0;
   font-size: 16px;
   line-height: 1;
@@ -3061,10 +3513,10 @@ h3 {
 
 .feature-table-search input {
   width: min(320px, 36vw);
-  min-height: 30px;
+  min-height: 28px;
   border: 1px solid #bdcbd2;
   border-radius: 5px;
-  padding: 5px 8px;
+  padding: 4px 8px;
 }
 
 .feature-table-expression {
@@ -3074,7 +3526,7 @@ h3 {
   gap: 8px;
   border-bottom: 1px solid #d7e2e7;
   background: #f7fbfb;
-  padding: 6px 10px;
+  padding: 3px 10px;
 }
 
 .feature-table-expression label {
@@ -3088,15 +3540,15 @@ h3 {
 }
 
 .feature-table-expression input {
-  min-height: 30px;
+  min-height: 28px;
   border: 1px solid #bdcbd2;
   border-radius: 5px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   font: inherit;
 }
 
 .feature-table-expression button {
-  min-height: 30px;
+  min-height: 28px;
 }
 
 .feature-table-expression-message {
@@ -3108,7 +3560,8 @@ h3 {
 }
 
 .feature-table-wrap {
-  max-height: 430px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   border: 0;
   border-radius: 0;
@@ -3340,7 +3793,7 @@ h3 {
   border-top: 1px solid #dbe2e6;
   background: #f8fafb;
   color: #60717d;
-  padding: 7px 10px;
+  padding: 4px 10px;
   font-size: 12px;
 }
 
@@ -4439,12 +4892,13 @@ textarea.source-text {
   margin-left: 2px;
 }
 
-.zoom-selected-button {
+.zoom-selected-button,
+.map-fit-extent-button {
   position: relative;
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
   padding: 0 !important;
   display: inline-flex !important;
   align-items: center;
@@ -4453,27 +4907,30 @@ textarea.source-text {
   font-size: 0 !important;
 }
 
-.zoom-selected-button::before {
+.zoom-selected-button::before,
+.map-fit-extent-button::before {
   content: none !important;
   display: none !important;
 }
 
-.zoom-selected-button::after {
+.zoom-selected-button::after,
+.map-fit-extent-button::after {
   content: none !important;
   display: none !important;
 }
 
-.zoom-selected-button .zoom-to-selection-icon {
-  width: 20px;
-  height: 20px;
+.zoom-selected-button .toolbar-icon,
+.map-fit-extent-button .toolbar-icon {
+  width: 17px;
+  height: 17px;
   stroke-width: 2.1;
 }
 
 .feature-table-toolbar .zoom-selected-button {
-  width: 38px;
-  min-width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
 }
 
 :root[data-theme="dark"] .theme-switch-button.light {

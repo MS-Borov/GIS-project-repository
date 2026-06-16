@@ -229,6 +229,107 @@ function AttributeExpressionBar(props: {
   );
 }
 
+const WINDOW_MIN_WIDTH = 300;
+const WINDOW_MIN_HEIGHT = 180;
+
+// Ручки изменения размера окна по всем сторонам/углам. Двигаем DOM-узел напрямую
+// (как и перетаскивание), а на pointerup коммитим новую позицию в стейт родителя —
+// иначе React при следующем рендере вернёт окно на старые left/top.
+function WindowResizeHandles(props: { onResizeCommit?: (position: { x: number; y: number }) => void }) {
+  function startResize(
+    event: ReactPointerEvent<HTMLDivElement>,
+    dirs: { n?: boolean; s?: boolean; e?: boolean; w?: boolean },
+  ) {
+    event.preventDefault();
+    const section = (event.currentTarget as HTMLElement).closest("section") as HTMLElement | null;
+    if (!section) {
+      return;
+    }
+    const el = section;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startLeft = el.offsetLeft;
+    const startTop = el.offsetTop;
+    const startWidth = el.offsetWidth;
+    const startHeight = el.offsetHeight;
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      let left = startLeft;
+      let top = startTop;
+      let width = startWidth;
+      let height = startHeight;
+      if (dirs.e) {
+        width = startWidth + dx;
+      }
+      if (dirs.s) {
+        height = startHeight + dy;
+      }
+      if (dirs.w) {
+        width = startWidth - dx;
+        left = startLeft + dx;
+      }
+      if (dirs.n) {
+        height = startHeight - dy;
+        top = startTop + dy;
+      }
+      // Минимальный размер: противоположная сторона остаётся на месте.
+      if (width < WINDOW_MIN_WIDTH) {
+        if (dirs.w) {
+          left -= WINDOW_MIN_WIDTH - width;
+        }
+        width = WINDOW_MIN_WIDTH;
+      }
+      if (height < WINDOW_MIN_HEIGHT) {
+        if (dirs.n) {
+          top -= WINDOW_MIN_HEIGHT - height;
+        }
+        height = WINDOW_MIN_HEIGHT;
+      }
+      // Не выводим окно за верх/левый край панели (правый/нижний край фиксирован).
+      if (dirs.w && left < 8) {
+        width -= 8 - left;
+        left = 8;
+      }
+      if (dirs.n && top < 54) {
+        height -= 54 - top;
+        top = 54;
+      }
+      el.style.width = `${width}px`;
+      el.style.height = `${height}px`;
+      if (dirs.w) {
+        el.style.left = `${left}px`;
+      }
+      if (dirs.n) {
+        el.style.top = `${top}px`;
+      }
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      props.onResizeCommit?.({ x: el.offsetLeft, y: el.offsetTop });
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  return (
+    <>
+      <div className="window-resize-handle window-resize-n" onPointerDown={(event) => startResize(event, { n: true })} />
+      <div className="window-resize-handle window-resize-s" onPointerDown={(event) => startResize(event, { s: true })} />
+      <div className="window-resize-handle window-resize-e" onPointerDown={(event) => startResize(event, { e: true })} />
+      <div className="window-resize-handle window-resize-w" onPointerDown={(event) => startResize(event, { w: true })} />
+      <div className="window-resize-handle window-resize-ne" onPointerDown={(event) => startResize(event, { n: true, e: true })} />
+      <div className="window-resize-handle window-resize-nw" onPointerDown={(event) => startResize(event, { n: true, w: true })} />
+      <div className="window-resize-handle window-resize-se" onPointerDown={(event) => startResize(event, { s: true, e: true })} />
+      <div className="window-resize-handle window-resize-sw" onPointerDown={(event) => startResize(event, { s: true, w: true })} />
+    </>
+  );
+}
+
 export function DraftFeatureTable(props: {
   layerName: string;
   fields: string[];
@@ -246,6 +347,7 @@ export function DraftFeatureTable(props: {
   zIndex: number;
   onFocus: () => void;
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+  onResizeCommit?: (position: { x: number; y: number }) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
@@ -380,6 +482,7 @@ export function DraftFeatureTable(props: {
       style={{ left: props.position.x, top: props.position.y, zIndex: props.zIndex }}
       onPointerDown={props.onFocus}
     >
+      <WindowResizeHandles onResizeCommit={props.onResizeCommit} />
       <div className="feature-table-heading" onPointerDown={props.onDragStart}>
         <div>
           <p className="eyebrow">Атрибутивная таблица</p>
@@ -557,6 +660,7 @@ export function FeatureTable(props: {
   zIndex: number;
   onFocus: () => void;
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+  onResizeCommit?: (position: { x: number; y: number }) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
@@ -730,6 +834,7 @@ export function FeatureTable(props: {
       style={{ left: props.position.x, top: props.position.y, zIndex: props.zIndex }}
       onPointerDown={props.onFocus}
     >
+      <WindowResizeHandles onResizeCommit={props.onResizeCommit} />
       <div className="feature-table-heading" onPointerDown={props.onDragStart}>
         <div>
           <p className="eyebrow">Атрибутивная таблица</p>
@@ -890,6 +995,7 @@ export function GisFeatureTable(props: {
   zIndex: number;
   onFocus: () => void;
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+  onResizeCommit?: (position: { x: number; y: number }) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
@@ -1195,6 +1301,7 @@ export function GisFeatureTable(props: {
       style={{ left: props.position.x, top: props.position.y, zIndex: props.zIndex }}
       onPointerDown={props.onFocus}
     >
+      <WindowResizeHandles onResizeCommit={props.onResizeCommit} />
       <div className="feature-table-heading" onPointerDown={props.onDragStart}>
         <div>
           <p className="eyebrow">Атрибутивная таблица</p>

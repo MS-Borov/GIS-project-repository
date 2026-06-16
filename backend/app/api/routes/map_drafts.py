@@ -9,7 +9,7 @@ from typing import Any
 
 import geopandas as gpd
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from shapely.geometry import shape
 from sqlalchemy.orm import Session
@@ -39,8 +39,12 @@ from app.services.storage import (
     build_map_draft_storage_key,
     build_submission_storage_key,
     get_s3_client,
+    read_upload_bounded,
     upload_bytes,
 )
+
+# Расширения и MIME для отчёта, прикладываемого к сдаче из карты.
+_REPORT_EXTENSIONS = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pdf": "application/pdf"}
 
 router = APIRouter(prefix="/map-drafts", tags=["map-drafts"])
 
@@ -116,8 +120,18 @@ def _draft_geojson_to_shapefile_archive(
     if geojson.get("type") != "FeatureCollection" or not isinstance(geojson.get("features"), list):
         raise HTTPException(status_code=422, detail="Draft export expects GeoJSON FeatureCollection")
 
+    # Назначенная пользователем СК слоёв. Координаты в geojson хранятся в WGS 84;
+    # если выбрана другая СК — слои перепроецируем в неё при экспорте.
+    draft_properties = geojson.get("properties") if isinstance(geojson.get("properties"), dict) else {}
+    target_crs = str(draft_properties.get("assigned_crs") or "").strip() or "EPSG:4326"
+
     grouped_features: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    grouped_layer_names: dict[str, str] = {}
+    group_layer_name: dict[str, str] = {}
+    group_geometry_suffix: dict[str, str] = {}
+    # Сколько разных типов геометрии встретилось у каждого слоя. Если один —
+    # экспортируем под чистым именем слоя; если несколько (смешанный слой) —
+    # различаем суффиксом _points/_lines/_polygons, иначе файлы перезатрут друг друга.
+    layer_geometry_suffixes: dict[str, set[str]] = defaultdict(set)
     for index, feature in enumerate(geojson["features"]):
         if not isinstance(feature, dict) or not feature.get("geometry"):
             continue
@@ -127,9 +141,14 @@ def _draft_geojson_to_shapefile_archive(
             geometry = shape(feature["geometry"])
         except Exception:
             continue
-        group_name = f"{layer_name}_{_geometry_suffix(geometry.geom_type)}"
-        grouped_layer_names.setdefault(group_name, layer_name)
-        grouped_features[group_name].append(
+        geometry_suffix = _geometry_suffix(geometry.geom_type)
+        # Группируем по (слой, тип геометрии): шейпфайл не держит смешанную
+        # геометрию в одном файле. \x00 — безопасный разделитель в ключе.
+        group_key = f"{layer_name}\x00{geometry_suffix}"
+        group_layer_name.setdefault(group_key, layer_name)
+        group_geometry_suffix.setdefault(group_key, geometry_suffix)
+        layer_geometry_suffixes[layer_name].add(geometry_suffix)
+        grouped_features[group_key].append(
             {
                 "geometry": geometry,
                 **{str(key): _json_safe_attribute(value) for key, value in properties.items()},
@@ -146,8 +165,16 @@ def _draft_geojson_to_shapefile_archive(
             used_names: set[str] = set()
             style_layers = _style_manifest_layers(style_manifest)
             exported_style_layers: list[dict[str, Any]] = []
-            for index, (group_name, rows) in enumerate(grouped_features.items(), start=1):
-                stem = _safe_archive_stem(group_name, f"layer_{index}")
+            for index, (group_key, rows) in enumerate(grouped_features.items(), start=1):
+                layer_name = group_layer_name.get(group_key, group_key)
+                # Чистое имя слоя, если у него один тип геометрии; суффикс типа
+                # добавляем только для реально смешанного слоя (на входе блокер
+                # это предотвращает, но старые/импортированные данные подстрахуем).
+                if len(layer_geometry_suffixes.get(layer_name, set())) > 1:
+                    display_name = f"{layer_name}_{group_geometry_suffix.get(group_key, 'geometry')}"
+                else:
+                    display_name = layer_name
+                stem = _safe_archive_stem(display_name, f"layer_{index}")
                 base_stem = stem
                 suffix = 2
                 while stem.lower() in used_names:
@@ -159,6 +186,13 @@ def _draft_geojson_to_shapefile_archive(
                 layer_dir.mkdir(parents=True, exist_ok=True)
                 shp_path = layer_dir / f"{stem}.shp"
                 gdf = gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:4326")
+                # Перевод в назначенную СК слоя (по умолчанию остаётся WGS 84).
+                # Некорректную/неизвестную СК тихо игнорируем — слой пишется в WGS 84.
+                if target_crs.upper() != "EPSG:4326":
+                    try:
+                        gdf = gdf.to_crs(target_crs)
+                    except Exception:
+                        pass
                 try:
                     gdf.to_file(shp_path, driver="ESRI Shapefile", encoding="UTF-8")
                 except Exception as exc:
@@ -168,7 +202,7 @@ def _draft_geojson_to_shapefile_archive(
                     if layer_file.is_file():
                         archive.write(layer_file, arcname=f"{stem}/{layer_file.name}")
 
-                source_layer_name = grouped_layer_names.get(group_name, group_name)
+                source_layer_name = layer_name
                 source_style = _find_style_manifest_layer(style_layers, source_layer_name)
                 exported_style_layer = dict(source_style or {})
                 exported_style_layer.update({
@@ -744,6 +778,7 @@ def update_map_draft(
 @router.post("/{draft_id}/submit", response_model=SubmissionRead, status_code=status.HTTP_201_CREATED)
 def submit_map_draft(
     draft_id: int,
+    report: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_student),
 ):
@@ -813,6 +848,27 @@ def submit_map_draft(
     else:
         db.flush()
         _evaluate_submission_assets(db=db, submission=submission, assets=created_assets)
+
+    # Необязательный отчёт (DOCX/PDF), приложенный студентом прямо при сдаче из
+    # карты, — кладём в ту же сдачу как asset типа "report".
+    if report is not None and report.filename:
+        ext = report.filename.rsplit(".", 1)[-1].lower() if "." in report.filename else ""
+        if ext not in _REPORT_EXTENSIONS:
+            raise HTTPException(status_code=422, detail="Отчёт должен быть в формате DOCX или PDF.")
+        report_bytes = read_upload_bounded(report, settings.max_document_upload_bytes)
+        report_key = build_asset_storage_key(submission.id, report.filename)
+        upload_bytes(report_key, report_bytes, _REPORT_EXTENSIONS[ext])
+        db.add(
+            SubmissionAsset(
+                submission_id=submission.id,
+                asset_name=report.filename,
+                asset_type="report",
+                detected_format=ext,
+                status="uploaded",
+                message="Отчёт приложен к сдаче из карты.",
+                storage_key=report_key,
+            )
+        )
 
     draft.status = "submitted"
     draft.last_submission_id = submission.id

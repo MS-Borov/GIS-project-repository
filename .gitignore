@@ -2,7 +2,7 @@
 .relay-venv
 
 datasets/
-models/
+models_ml/
 experiments/
 
 frontend/node_modules/

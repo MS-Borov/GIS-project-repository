@@ -1,4 +1,7 @@
-type CourseTab = "stream" | "assignments" | "submissions" | "layers" | "requirements" | "people";
+import { useState } from "react";
+import { CheckIcon, CloseIcon, RestoreIcon, TrashIcon } from "../../shared/ui/ToolbarIcons";
+
+type CourseTab = "stream" | "assignments" | "submissions" | "layers" | "requirements" | "people" | "trash";
 
 type Course = {
   id: number;
@@ -10,7 +13,40 @@ type Assignment = {
   id: number;
   title: string;
   description?: string | null;
+  deleted_at?: string | null;
+  my_submission_status?: string | null;
 };
+
+const TRASH_RETENTION_DAYS = 7;
+
+function trashCountdownLabel(deletedAt?: string | null) {
+  if (!deletedAt) {
+    return "В корзине";
+  }
+  const deleted = new Date(deletedAt).getTime();
+  if (Number.isNaN(deleted)) {
+    return "В корзине";
+  }
+  const msLeft = deleted + TRASH_RETENTION_DAYS * 86_400_000 - Date.now();
+  if (msLeft <= 0) {
+    return "Будет удалено при ближайшей очистке";
+  }
+  const daysLeft = Math.ceil(msLeft / 86_400_000);
+  return `Удалится через ${daysLeft} дн.`;
+}
+
+function submissionStatusBadge(status?: string | null) {
+  const value = (status ?? "").toLowerCase();
+  if (value === "pending") return "На проверке";
+  if (value === "accepted") return "Принято";
+  if (value === "returned") return "Вернули на доработку";
+  return null;
+}
+
+function isAssignmentDone(status?: string | null) {
+  const value = (status ?? "").toLowerCase();
+  return value === "pending" || value === "accepted";
+}
 
 type User = {
   email: string;
@@ -28,6 +64,7 @@ export function CourseHeader(props: {
   selectedAssignment: Assignment | null;
   assignmentsCount: number;
   submissionsCount: number;
+  trashedCount?: number;
   activeTab: CourseTab;
   onTabChange: (tab: CourseTab) => void;
 }) {
@@ -41,6 +78,10 @@ export function CourseHeader(props: {
 
   if (props.role === "teacher") {
     tabs.push({ id: "requirements", label: "Требования" });
+    tabs.push({
+      id: "trash",
+      label: props.trashedCount ? `Корзина (${props.trashedCount})` : "Корзина",
+    });
   }
 
   return (
@@ -136,7 +177,141 @@ export function AssignmentOverview(props: {
   onAssignmentSelect: (id: number) => void;
   onOpenWorkspace?: (id: number) => void;
   onContinueDraft?: (id: number) => void;
+  onDeleteAssignment?: (id: number) => void;
 }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [studentTab, setStudentTab] = useState<"assigned" | "done">("assigned");
+  const canDelete = props.mode === "teacher" && Boolean(props.onDeleteAssignment);
+
+  function renderAssignment(assignment: Assignment) {
+    const badge = props.mode === "student" ? submissionStatusBadge(assignment.my_submission_status) : null;
+    const badgeClass = `assignment-badge badge-${(assignment.my_submission_status ?? "").toLowerCase() || "none"}`;
+    return (
+      <article
+        key={assignment.id}
+        className={[
+          "classwork-item",
+          assignment.id === props.selectedAssignmentId ? "active" : "",
+          canDelete ? "has-corner-actions" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <button
+          className="classwork-main"
+          onClick={() => props.onAssignmentSelect(assignment.id)}
+          disabled={props.isLoading}
+        >
+          <span className="classwork-dot">#</span>
+          <span>
+            <strong>{assignment.title}</strong>
+            <small>{assignment.description || `Задание #${assignment.id}`}</small>
+            {badge ? <span className={badgeClass}>{badge}</span> : null}
+          </span>
+        </button>
+
+        {canDelete ? (
+          <div className="classwork-corner-actions">
+            {confirmDeleteId === assignment.id ? (
+              <>
+                <button
+                  type="button"
+                  className="icon-button danger"
+                  onClick={() => {
+                    props.onDeleteAssignment?.(assignment.id);
+                    setConfirmDeleteId(null);
+                  }}
+                  disabled={props.isLoading}
+                  title="Подтвердить — переместить в корзину"
+                  aria-label="Подтвердить удаление"
+                >
+                  <CheckIcon />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setConfirmDeleteId(null)}
+                  disabled={props.isLoading}
+                  title="Отмена"
+                  aria-label="Отмена"
+                >
+                  <CloseIcon />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="icon-button danger"
+                onClick={() => setConfirmDeleteId(assignment.id)}
+                disabled={props.isLoading}
+                title="Переместить задание в корзину"
+                aria-label="Удалить задание"
+              >
+                <TrashIcon />
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        {props.mode === "student" ? (
+          <div className="classwork-actions">
+            <button onClick={() => props.onOpenWorkspace?.(assignment.id)} disabled={props.isLoading}>
+              Открыть карту
+            </button>
+            <button onClick={() => props.onContinueDraft?.(assignment.id)} disabled={props.isLoading}>
+              Продолжить черновик
+            </button>
+            <button onClick={() => props.onAssignmentSelect(assignment.id)} disabled={props.isLoading}>
+              Сдать архив
+            </button>
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+
+  if (props.mode === "student") {
+    const active = props.assignments.filter((a) => !isAssignmentDone(a.my_submission_status));
+    const done = props.assignments.filter((a) => isAssignmentDone(a.my_submission_status));
+    const shown = studentTab === "done" ? done : active;
+    return (
+      <section className="section-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Задания</p>
+            <h2>Задания курса</h2>
+          </div>
+        </div>
+
+        <nav className="assignment-subtabs" aria-label="Фильтр заданий">
+          <button
+            type="button"
+            className={studentTab === "assigned" ? "active" : ""}
+            onClick={() => setStudentTab("assigned")}
+          >
+            Назначенные <span className="subtab-count">{active.length}</span>
+          </button>
+          <button
+            type="button"
+            className={studentTab === "done" ? "active" : ""}
+            onClick={() => setStudentTab("done")}
+          >
+            Выполненные <span className="subtab-count">{done.length}</span>
+          </button>
+        </nav>
+
+        <div className="classwork-list">
+          {shown.length === 0 ? (
+            <p className="muted">
+              {studentTab === "done" ? "Пока нет сданных работ." : "Нет назначенных заданий."}
+            </p>
+          ) : null}
+          {shown.map(renderAssignment)}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="section-panel">
       <div className="section-heading">
@@ -147,36 +322,53 @@ export function AssignmentOverview(props: {
       </div>
       <div className="classwork-list">
         {props.assignments.length === 0 ? <p className="muted">Пока нет созданных заданий.</p> : null}
-        {props.assignments.map((assignment) => (
-          <article
-            key={assignment.id}
-            className={assignment.id === props.selectedAssignmentId ? "classwork-item active" : "classwork-item"}
-          >
+        {props.assignments.map(renderAssignment)}
+      </div>
+    </section>
+  );
+}
+
+export function TrashPanel(props: {
+  trashedAssignments: Assignment[];
+  isLoading: boolean;
+  onRestoreAssignment: (id: number) => void;
+  onRefresh?: () => void;
+}) {
+  return (
+    <section className="section-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Корзина</p>
+          <h2>Удалённые задания</h2>
+        </div>
+        {props.onRefresh ? (
+          <button onClick={props.onRefresh} disabled={props.isLoading}>
+            Обновить
+          </button>
+        ) : null}
+      </div>
+      <p className="muted">
+        Удалённые задания хранятся {TRASH_RETENTION_DAYS} дней, затем удаляются окончательно вместе со сдачами.
+      </p>
+      <div className="trash-list">
+        {props.trashedAssignments.length === 0 ? <p className="muted">Корзина пуста.</p> : null}
+        {props.trashedAssignments.map((assignment) => (
+          <div key={assignment.id} className="trash-row">
+            <div className="trash-row-main">
+              <strong>{assignment.title}</strong>
+              <span>{trashCountdownLabel(assignment.deleted_at)}</span>
+            </div>
             <button
-              className="classwork-main"
-              onClick={() => props.onAssignmentSelect(assignment.id)}
+              type="button"
+              className="icon-button"
+              onClick={() => props.onRestoreAssignment(assignment.id)}
               disabled={props.isLoading}
+              title="Восстановить задание"
+              aria-label="Восстановить задание"
             >
-              <span className="classwork-dot">#</span>
-              <span>
-                <strong>{assignment.title}</strong>
-                <small>{assignment.description || `Задание #${assignment.id}`}</small>
-              </span>
+              <RestoreIcon />
             </button>
-            {props.mode === "student" ? (
-              <div className="classwork-actions">
-                <button onClick={() => props.onOpenWorkspace?.(assignment.id)} disabled={props.isLoading}>
-                  Открыть карту
-                </button>
-                <button onClick={() => props.onContinueDraft?.(assignment.id)} disabled={props.isLoading}>
-                  Продолжить черновик
-                </button>
-                <button onClick={() => props.onAssignmentSelect(assignment.id)} disabled={props.isLoading}>
-                  Сдать архив
-                </button>
-              </div>
-            ) : null}
-          </article>
+          </div>
         ))}
       </div>
     </section>
@@ -290,4 +482,3 @@ function PeopleGroup(props: {
     </section>
   );
 }
-

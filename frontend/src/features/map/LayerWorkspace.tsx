@@ -125,6 +125,9 @@ export function LayerWorkspace(props: {
   const [layerPropertiesId, setLayerPropertiesId] = useState<number | null>(null);
   const [layerPropertiesPosition, setLayerPropertiesPosition] = useState({ x: 390, y: 70 });
   const [layerPropertiesDragOffset, setLayerPropertiesDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // DOM-узел окна свойств слоя: двигаем напрямую во время drag, чтобы не
+  // ререндерить тяжёлый LayerWorkspace на каждый pointermove.
+  const draggedLayerWindowElRef = useRef<HTMLElement | null>(null);
   const [symbolEditor, setSymbolEditor] = useState<{
     assetId: number;
     classIndex: number;
@@ -212,6 +215,19 @@ export function LayerWorkspace(props: {
   const activeEditableLayer = activeEditableLayerId
     ? layers.find((layer) => layer.asset.id === activeEditableLayerId) ?? null
     : null;
+
+  function toggleLayerEditing(assetId: number) {
+    // Тумблер: повторное нажатие на уже редактируемом слое завершает
+    // редактирование. Автосохранение черновика срабатывает в
+    // MultiLayerMapPanel по переходу редактирования вкл→выкл.
+    if (activeEditableLayerId === assetId && isDraftEditingEnabled) {
+      setActiveEditableLayerId(null);
+      setIsDraftEditingEnabled(false);
+      return;
+    }
+    setActiveEditableLayerId(assetId);
+    setIsDraftEditingEnabled(true);
+  }
   const selectedLayerForEditing = selectedLayerId !== null
     ? orderedAssets.find((asset) => asset.id === selectedLayerId) ?? null
     : null;
@@ -310,6 +326,8 @@ export function LayerWorkspace(props: {
     }
     const nextAliases: Record<number, string> = {};
     const nextStyles: Record<number, LayerStyleSettings> = {};
+    const nextGroups: Record<number, string> = {};
+    const nextGroupNames = new Set<string>();
     previewableAssets.forEach((asset, index) => {
       const qgisLayer = qgisLayerForAsset(qgisProject, asset);
       const manifestLayer = styleManifestLayerForAsset(props.styleManifest, asset);
@@ -323,9 +341,18 @@ export function LayerWorkspace(props: {
       } else if (manifestLayer?.style) {
         nextStyles[asset.id] = normalizeLayerStyle(manifestLayer.style, index);
       }
+      const groupName = manifestLayer?.group_name || qgisLayer?.group_name || null;
+      if (groupName) {
+        nextGroups[asset.id] = groupName;
+        nextGroupNames.add(groupName);
+      }
     });
     setLayerAliases((current) => ({ ...current, ...nextAliases }));
     setLayerStyles((current) => ({ ...current, ...nextStyles }));
+    if (nextGroupNames.size > 0) {
+      setLayerGroupNames((current) => Array.from(new Set([DEFAULT_LAYER_GROUP, ...current, ...nextGroupNames])));
+      setLayerGroups((current) => ({ ...nextGroups, ...current }));
+    }
     setLayers((current) =>
       uniqueLayerAssets(current.map((layer) => layer.asset), qgisProject)
         .map((asset) => current.find((layer) => layer.asset.id === asset.id))
@@ -820,6 +847,22 @@ export function LayerWorkspace(props: {
       availableGroups[0] ?? DEFAULT_LAYER_GROUP,
     )?.trim();
     const groupName = groupInput || DEFAULT_LAYER_GROUP;
+    const geometryChoice = window
+      .prompt("Тип геометрии слоя: 1 — Точка, 2 — Линия, 3 — Полигон", "3")
+      ?.trim();
+    if (!geometryChoice) {
+      return;
+    }
+    const geometryKindByChoice: Record<string, "point" | "line" | "polygon"> = {
+      "1": "point",
+      "2": "line",
+      "3": "polygon",
+    };
+    const geometryKind = geometryKindByChoice[geometryChoice];
+    if (!geometryKind) {
+      window.alert("Выберите тип: 1 — Точка, 2 — Линия или 3 — Полигон.");
+      return;
+    }
     const assetId = -Date.now();
     const asset: SubmissionAsset = {
       id: assetId,
@@ -842,6 +885,10 @@ export function LayerWorkspace(props: {
       geojson: { type: "FeatureCollection", features: [] },
     };
     addLocalPreviewLayer(asset, preview, groupName);
+    setLayerStyles((current) => ({
+      ...current,
+      [assetId]: normalizeLayerStyle({ ...current[assetId], geometryKind }, layers.length),
+    }));
     setLayerAliases((current) => ({ ...current, [assetId]: name }));
     setSelectedLayerId(assetId);
     setActiveEditableLayerId(assetId);
@@ -1307,14 +1354,24 @@ export function LayerWorkspace(props: {
       return;
     }
     const activeDragOffset = layerPropertiesDragOffset;
+    const draggedEl = draggedLayerWindowElRef.current;
+    let latest = layerPropertiesPosition;
 
     function handlePointerMove(event: PointerEvent) {
       const nextX = Math.min(Math.max(8, event.clientX - activeDragOffset.x), Math.max(8, window.innerWidth - 340));
       const nextY = Math.min(Math.max(8, event.clientY - activeDragOffset.y), Math.max(8, window.innerHeight - 160));
-      setLayerPropertiesPosition({ x: nextX, y: nextY });
+      latest = { x: nextX, y: nextY };
+      if (draggedEl) {
+        draggedEl.style.left = `${nextX}px`;
+        draggedEl.style.top = `${nextY}px`;
+      } else {
+        setLayerPropertiesPosition(latest);
+      }
     }
 
     function handlePointerUp() {
+      setLayerPropertiesPosition(latest);
+      draggedLayerWindowElRef.current = null;
       setLayerPropertiesDragOffset(null);
     }
 
@@ -1350,7 +1407,11 @@ export function LayerWorkspace(props: {
         <div className="section-heading">
           <div>
             <p className="eyebrow">{props.isAssignmentWorkspace ? "Рабочая карта" : "Просмотр ГИС-слоёв"}</p>
-            <h2>{props.workspaceTitle ?? (props.isAssignmentWorkspace ? "Рабочая карта задания" : "Слои выбранной сдачи")}</h2>
+            <h2>
+              {props.workspaceTitle ??
+                props.workspaceAssignment?.title ??
+                (props.isAssignmentWorkspace ? "Рабочая карта задания" : "Слои выбранной сдачи")}
+            </h2>
           </div>
           <div className="button-row">
             {props.selectedSubmissionId && !props.isStandalone ? (
@@ -1410,9 +1471,13 @@ export function LayerWorkspace(props: {
           <aside className="layer-list">
             <div className="layer-list-heading">
               <div>
-                <strong>
-                  {props.workspaceTitle ?? props.workspaceAssignment?.title ?? selectedSubmission?.original_filename ?? `Сдача #${props.selectedSubmissionId}`}
-                </strong>
+                {/* Заголовок задания показываем в шапке панели; в узкой колонке его не
+                    дублируем (длинное название там расползалось на много строк). */}
+                {props.hideHeader || !props.isAssignmentWorkspace ? (
+                  <strong>
+                    {props.workspaceTitle ?? props.workspaceAssignment?.title ?? selectedSubmission?.original_filename ?? `Сдача #${props.selectedSubmissionId}`}
+                  </strong>
+                ) : null}
                 <span>{previewableAssets.length} ГИС-слоёв найдено</span>
               </div>
               <div className="layer-list-actions">
@@ -1695,6 +1760,17 @@ export function LayerWorkspace(props: {
                       <button onClick={() => void loadLayer(asset)} disabled={isLoadingLayer} title={layer ? "Обновить слой" : "Открыть слой"}>
                         {layer ? "↻" : isLoadingLayer ? "..." : "+"}
                       </button>
+                      <button
+                        className={isActiveEditableLayer ? "active" : ""}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleLayerEditing(asset.id);
+                        }}
+                        disabled={!layer}
+                        title={isActiveEditableLayer ? "Завершить редактирование и сохранить" : "Редактировать слой"}
+                      >
+                        {isActiveEditableLayer ? "✓" : "✎"}
+                      </button>
                       <button onClick={() => hideLayerFromList(asset.id)} title="Скрыть слой из списка">
                         ×
                       </button>
@@ -1783,13 +1859,12 @@ export function LayerWorkspace(props: {
                       </button>
                       <button
                         onClick={() => {
-                          setActiveEditableLayerId(asset.id);
-                          setIsDraftEditingEnabled(true);
+                          toggleLayerEditing(asset.id);
                           closeLayerMenu();
                         }}
                       >
-                        <span className="menu-icon" aria-hidden="true">✎</span>
-                        Включить редактирование
+                        <span className="menu-icon" aria-hidden="true">{isActiveEditableLayer ? "✓" : "✎"}</span>
+                        {isActiveEditableLayer ? "Завершить редактирование и сохранить" : "Включить редактирование"}
                       </button>
                       <button
                         onClick={() => {
@@ -1876,6 +1951,7 @@ export function LayerWorkspace(props: {
               onFocus={() => bringWindowToFront("layerProperties")}
               onDragStart={(event) => {
                 bringWindowToFront("layerProperties");
+                draggedLayerWindowElRef.current = (event.currentTarget as HTMLElement).closest("section");
                 setLayerPropertiesDragOffset({
                   x: event.clientX - layerPropertiesPosition.x,
                   y: event.clientY - layerPropertiesPosition.y,
@@ -1963,5 +2039,3 @@ export function LayerWorkspace(props: {
     </section>
   );
 }
-
-

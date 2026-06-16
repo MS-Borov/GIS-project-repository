@@ -14,7 +14,7 @@ from app.models.assignment_material import AssignmentMaterial
 from app.models.course import CourseMember
 from app.models.submission_asset import SubmissionAsset
 from app.models.user import User
-from app.services.geojson_preview import build_geojson_preview, parse_preview_bbox
+from app.services.geojson_preview import MAX_PREVIEW_FEATURES, build_geojson_preview, parse_preview_bbox
 from app.services.storage import get_s3_client
 
 router = APIRouter(prefix="/downloads", tags=["asset-downloads"])
@@ -126,7 +126,7 @@ def download_submission_asset(
 @router.get("/submission-assets/{asset_id}/geojson-preview")
 def preview_submission_asset_geojson(
     asset_id: int,
-    max_features: int = 500,
+    max_features: int = MAX_PREVIEW_FEATURES,
     bbox: str | None = None,
     clip_boundary: str | None = None,
     db: Session = Depends(get_db),
@@ -154,8 +154,8 @@ def preview_submission_asset_geojson(
 
     if max_features < 1:
         max_features = 1
-    if max_features > 1000:
-        max_features = 1000
+    if max_features > MAX_PREVIEW_FEATURES:
+        max_features = MAX_PREVIEW_FEATURES
     try:
         bbox_wgs84 = parse_preview_bbox(bbox)
     except ValueError as e:
@@ -204,7 +204,7 @@ def preview_submission_asset_geojson(
 @router.get("/assignment-materials/{material_id}/geojson-preview")
 def preview_assignment_material_geojson(
     material_id: int,
-    max_features: int = 500,
+    max_features: int = MAX_PREVIEW_FEATURES,
     bbox: str | None = None,
     clip_boundary: str | None = None,
     db: Session = Depends(get_db),
@@ -220,8 +220,8 @@ def preview_assignment_material_geojson(
 
     if max_features < 1:
         max_features = 1
-    if max_features > 1000:
-        max_features = 1000
+    if max_features > MAX_PREVIEW_FEATURES:
+        max_features = MAX_PREVIEW_FEATURES
     try:
         bbox_wgs84 = parse_preview_bbox(bbox)
     except ValueError as e:

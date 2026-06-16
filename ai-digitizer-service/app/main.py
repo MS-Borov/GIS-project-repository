@@ -47,6 +47,24 @@ OSM_FOREST_LARGE_PROMPT_RATIO = float(os.getenv("OSM_FOREST_LARGE_PROMPT_RATIO",
 OSM_FOREST_LARGE_MAX_AREA_RATIO = float(os.getenv("OSM_FOREST_LARGE_MAX_AREA_RATIO", "0.9"))
 OSM_FOREST_SIMPLIFY_RATIO = float(os.getenv("OSM_FOREST_SIMPLIFY_RATIO", "0.0025"))
 OSM_FOREST_LARGE_SIMPLIFY_RATIO = float(os.getenv("OSM_FOREST_LARGE_SIMPLIFY_RATIO", "0.001"))
+# Тюнинг чувствительности/разделения дигитайзера (без правок кода — .env + рестарт).
+# Лес (_predict_osm_forest_crop_mask):
+#   *_MAX_COMPONENTS    — сколько отдельных кусков леса оставлять (больше = чувствительнее/больше полигонов);
+#   *_CLOSE_*           — размер «закрытия»: меньше = соседние массивы не склеиваются в один полигон;
+#   *_MIN_GREEN_RATIO   — ниже = пропускает более бледный лес;
+#   *_MIN_SATURATION    — ниже = пропускает более тусклый/серый лес.
+OSM_FOREST_MAX_COMPONENTS = int(os.getenv("OSM_FOREST_MAX_COMPONENTS", "10"))
+OSM_FOREST_LARGE_MAX_COMPONENTS = int(os.getenv("OSM_FOREST_LARGE_MAX_COMPONENTS", "20"))
+OSM_FOREST_CLOSE_SIZE = int(os.getenv("OSM_FOREST_CLOSE_SIZE", "5"))
+OSM_FOREST_LARGE_CLOSE_MAX = int(os.getenv("OSM_FOREST_LARGE_CLOSE_MAX", "11"))
+OSM_FOREST_MIN_GREEN_RATIO = float(os.getenv("OSM_FOREST_MIN_GREEN_RATIO", "0.28"))
+OSM_FOREST_MIN_SATURATION = float(os.getenv("OSM_FOREST_MIN_SATURATION", "46"))
+# Постобработка маски в полигоны (_mask_to_polygon, общий для воды и леса):
+#   AI_MASK_OPEN_*           — «открытие»: больше = агрессивнее рубит тонкие линейные объекты (реки), но срезает тонкие края;
+#   AI_MASK_COMPONENT_MIN_RATIO — порог отсева мелких кусков (доля от крупнейшего).
+AI_MASK_OPEN_RATIO = float(os.getenv("AI_MASK_OPEN_RATIO", "0.014"))
+AI_MASK_OPEN_MAX_PX = int(os.getenv("AI_MASK_OPEN_MAX_PX", "6"))
+AI_MASK_COMPONENT_MIN_RATIO = float(os.getenv("AI_MASK_COMPONENT_MIN_RATIO", "0.045"))
 OSM_LOCAL_RF_ENABLED = os.getenv("OSM_LOCAL_RF_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 OSM_LOCAL_RF_MAX_SAMPLES = int(os.getenv("OSM_LOCAL_RF_MAX_SAMPLES", "9000"))
 OSM_LOCAL_RF_MIN_POSITIVE = int(os.getenv("OSM_LOCAL_RF_MIN_POSITIVE", "32"))
@@ -745,9 +763,26 @@ def _mask_to_polygon(
         return None
 
     binary = np.where(cropped > 0, 255, 0).astype("uint8")
-    kernel = np.ones((3, 3), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    # «Открытие» отсекает тонкие ЛИНЕЙНЫЕ объекты (реки, протоки): классификатор
+    # по цвету не отличает их от озера (всё — вода), поэтому единственный признак
+    # для разделения — форма. Ядро масштабируем по размеру выделения, чтобы
+    # разорвать связь река↔водоём и стереть саму реку, сохранив компактное озеро.
+    # Если ядро «съедает» почти весь объект (узкий/мелкий водоём) — уменьшаем его,
+    # чтобы случайно не стереть небольшое озеро.
+    filled = int(np.count_nonzero(binary))
+    # Чувствительность: меньше радиус «открытия» → меньше срезаются тонкие края/
+    # хвосты объекта (выше «жадность»); больше → агрессивнее рубятся тонкие
+    # линейные объекты (реки). 0.014 / cap 6 — компромисс.
+    base_radius = int(min(max(2, round(min(binary.shape[:2]) * AI_MASK_OPEN_RATIO)), AI_MASK_OPEN_MAX_PX))
+    for radius in range(base_radius, 0, -1):
+        open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (radius * 2 + 1, radius * 2 + 1))
+        opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, open_kernel)
+        if int(np.count_nonzero(opened)) >= filled * 0.2:
+            binary = opened
+            break
+    # Закрытие маленьким ядром — заполнить мелкие дырки, но НЕ восстановить мост к реке.
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, close_kernel)
 
     strict_prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image_size, image_extent, dilation_px=0)
     if strict_prompt_mask is not None and int(np.count_nonzero(strict_prompt_mask > 0)) > 0:
@@ -764,26 +799,49 @@ def _mask_to_polygon(
     if not contours:
         return None
 
-    prompt_mask = _draw_prompt_geometry(prompt_geometry, bbox, image_size, image_extent)
     crop_area = float((right - left) * (bottom - top))
-    contour = max(contours, key=lambda item: _contour_score(item, prompt_mask, crop_area))
-    area = float(cv2.contourArea(contour))
-    if area < max(16.0, crop_area * 0.005):
-        return None
-
+    min_area = max(16.0, crop_area * 0.005)
     min_epsilon = 0.35 if simplify_ratio <= 0.001 else 0.8
-    epsilon = max(min_epsilon, simplify_ratio * cv2.arcLength(contour, True))
-    simplified = cv2.approxPolyDP(contour, epsilon, True)
-    points = [(float(point[0][0] + left), float(point[0][1] + top)) for point in simplified]
-    if len(points) < 3:
+
+    # Берём ВСЕ значимые компоненты маски, а не один крупнейший: из одной грубой
+    # рамки получаем несколько РАЗДЕЛЬНЫХ полигонов (например, лесные массивы по
+    # разные стороны дороги). Маска уже ограничена целевым классом (вода/лес),
+    # поэтому посторонние объекты в неё не попадают. Относительный порог (доля от
+    # крупнейшего) отсекает мелкие «огрызки» — в т.ч. остаток тонкой реки после
+    # «открытия» — сохраняя сопоставимые по размеру куски.
+    areas = [(contour, float(cv2.contourArea(contour))) for contour in contours]
+    significant = [(contour, area) for contour, area in areas if area >= min_area]
+    if not significant:
+        return None
+    largest_area = max(area for _, area in significant)
+    significant = [(contour, area) for contour, area in significant if area >= largest_area * AI_MASK_COMPONENT_MIN_RATIO]
+    significant.sort(key=lambda item: item[1], reverse=True)
+    significant = significant[:12]
+
+    polygons: list = []
+    total_area = 0.0
+    for contour, area in significant:
+        epsilon = max(min_epsilon, simplify_ratio * cv2.arcLength(contour, True))
+        simplified = cv2.approxPolyDP(contour, epsilon, True)
+        points = [(float(point[0][0] + left), float(point[0][1] + top)) for point in simplified]
+        if len(points) < 3:
+            continue
+        ring = [_pixel_to_map(point, image_size, image_extent) for point in points]
+        if ring[0] != ring[-1]:
+            ring.append(ring[0])
+        polygons.append([ring])
+        total_area += area
+
+    if not polygons:
         return None
 
-    ring = [_pixel_to_map(point, image_size, image_extent) for point in points]
-    if ring[0] != ring[-1]:
-        ring.append(ring[0])
-
-    confidence = min(0.98, max(0.35, area / crop_area))
-    return {"type": "Polygon", "coordinates": [ring]}, confidence, len(ring)
+    confidence = min(0.98, max(0.35, total_area / crop_area))
+    point_count = sum(len(rings[0]) for rings in polygons)
+    if len(polygons) == 1:
+        geometry = {"type": "Polygon", "coordinates": polygons[0]}
+    else:
+        geometry = {"type": "MultiPolygon", "coordinates": polygons}
+    return geometry, confidence, point_count
 
 
 def _sam2_mask_input_from_binary_mask(mask: np.ndarray) -> np.ndarray | None:
@@ -1136,6 +1194,17 @@ def _predict_osm_water_crop_mask(
         keep[component] = 255
         kept_area += area
 
+    # Финальное вычитание леса: рост/морфология могли захватить явно зелёные
+    # (лесные) пиксели. Берём только однозначно зелёные (g заметно больше b и r),
+    # чтобы не задеть сине-серую воду.
+    forest_like = (
+        (h >= 36)
+        & (h <= 96)
+        & (s >= 16)
+        & (g >= b + 10)
+        & (g >= r + 2)
+    )
+    keep[forest_like] = 0
     water_pixels = int(np.count_nonzero(keep > 0))
     if water_pixels < min_component_area:
         return None
@@ -1365,11 +1434,15 @@ def _predict_osm_forest_crop_mask(
 
     kernel = np.ones((3, 3), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    close_size = 7
-    close_iterations = 2
+    # CLOSE заполняет дырки ВНУТРИ массива, но крупным ядром заодно «сшивает»
+    # соседние отдельные участки в одну компоненту → они склеиваются в один
+    # полигон (и одну запись в таблице). Держим ядро небольшим, чтобы раздельные
+    # массивы оставались раздельными.
+    close_size = max(3, OSM_FOREST_CLOSE_SIZE | 1)
+    close_iterations = 1
     if large_prompt:
-        close_size = max(9, min(25, int(min(mask.shape[:2]) * 0.035) | 1))
-        close_iterations = 2
+        close_size = max(close_size, min(OSM_FOREST_LARGE_CLOSE_MAX, int(min(mask.shape[:2]) * 0.018) | 1))
+        close_iterations = 1
     close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_size, close_size))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=close_iterations)
     mask = cv2.dilate(mask, kernel, iterations=1)
@@ -1406,10 +1479,10 @@ def _predict_osm_forest_crop_mask(
         broad_fill_ratio = component_broad_fill_pixels / max(1.0, float(area))
         component_green_pixels = int(np.count_nonzero((strong_forest | pale_forest | wetland_forest | linear_forest | pale_pattern_forest | broad_forest_fill) & component))
         green_pixel_ratio = component_green_pixels / max(1.0, float(area))
-        min_green_ratio = 0.16 if max(pale_pattern_ratio, broad_fill_ratio) >= 0.45 else 0.35
+        min_green_ratio = 0.16 if max(pale_pattern_ratio, broad_fill_ratio) >= 0.45 else OSM_FOREST_MIN_GREEN_RATIO
         if green_pixel_ratio < min_green_ratio:
             continue
-        if max(pale_pattern_ratio, broad_fill_ratio) < 0.45 and float(mean_rgb[2]) >= float(mean_rgb[1]) - 8.0 and saturation_mean < 58.0:
+        if max(pale_pattern_ratio, broad_fill_ratio) < 0.45 and float(mean_rgb[2]) >= float(mean_rgb[1]) - 8.0 and saturation_mean < OSM_FOREST_MIN_SATURATION:
             continue
         green_balance = float(mean_rgb[1] - max(mean_rgb[0], mean_rgb[2]) * 0.72)
         centroid = centroids[label]
@@ -1430,7 +1503,9 @@ def _predict_osm_forest_crop_mask(
 
     candidates.sort(reverse=True)
     kept_area = 0
-    max_kept_components = 12 if large_prompt else 5
+    # Сколько отдельных лесных кусков оставляем. Больше → выше чувствительность,
+    # лучше разделение на отдельные полигоны (и столько же объектов в таблице).
+    max_kept_components = OSM_FOREST_LARGE_MAX_COMPONENTS if large_prompt else OSM_FOREST_MAX_COMPONENTS
     for _, label in candidates[:max_kept_components]:
         component = labels == label
         area = int(np.count_nonzero(component))
@@ -1439,6 +1514,12 @@ def _predict_osm_forest_crop_mask(
         keep[component] = 255
         kept_area += area
 
+    # Финальное вычитание воды: рост (_seed_connected_candidate_mask) и
+    # морфология (close/dilate) могли заново добавить водные пиксели в лесную
+    # маску уже ПОСЛЕ попиксельной фильтрации. water_exclusion отсекает и
+    # приглушённую сине-зелёную воду, но щадит зелёный лес (guard g <= r + 12),
+    # поэтому реальный лес не страдает.
+    keep[water_exclusion] = 0
     forest_pixels = int(np.count_nonzero(keep > 0))
     if forest_pixels < min_component_area:
         return None
@@ -1622,6 +1703,13 @@ def _predict_osm_local_rf_crop_mask(
         mask = cv2.bitwise_and(mask, prompt_mask)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.bitwise_and(mask, prompt_mask)
+
+    # Финальное вычитание противоположного класса по строгим seed-предикатам
+    # (они уже служат негативами для RF), чтобы рост не приносил чужой класс.
+    if target_type == "forest":
+        mask[water_seed] = 0
+    else:
+        mask[forest_seed] = 0
 
     prompt_pixels = int(np.count_nonzero(prompt_bool))
     predicted_pixels = int(np.count_nonzero(mask > 0))

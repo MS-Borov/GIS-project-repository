@@ -118,6 +118,37 @@ with engine.begin() as connection:
     )
     connection.execute(
         text(
+            "ALTER TABLE assignments "
+            "ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE"
+        )
+    )
+    connection.execute(
+        text(
+            "ALTER TABLE submissions "
+            "ADD COLUMN IF NOT EXISTS review_status VARCHAR(50)"
+        )
+    )
+    connection.execute(
+        text(
+            "UPDATE submissions "
+            "SET review_status = 'pending' "
+            "WHERE review_status IS NULL"
+        )
+    )
+    connection.execute(
+        text(
+            "ALTER TABLE submissions "
+            "ALTER COLUMN review_status SET DEFAULT 'pending'"
+        )
+    )
+    connection.execute(
+        text(
+            "ALTER TABLE submissions "
+            "ADD COLUMN IF NOT EXISTS review_comment TEXT"
+        )
+    )
+    connection.execute(
+        text(
             "ALTER TABLE users "
             "ADD COLUMN IF NOT EXISTS email_verified BOOLEAN"
         )

@@ -18,6 +18,12 @@ def _first_named(element: ET.Element, name: str) -> ET.Element | None:
     return next(_iter_named(element, name), None)
 
 
+def _children_named(element: ET.Element, name: str):
+    for child in list(element):
+        if _strip_namespace(child.tag) == name:
+            yield child
+
+
 def _float_or_none(value: str | None) -> float | None:
     if value is None:
         return None
@@ -172,6 +178,15 @@ def _layer_source_basename(source: str | None) -> str | None:
     return Path(clean_source).stem.lower()
 
 
+def _project_crs(root: ET.Element) -> str | None:
+    project_crs = _first_named(root, "projectCrs")
+    if project_crs is None:
+        return None
+    authid = _first_named(project_crs, "authid")
+    value = (authid.text or "").strip() if authid is not None else ""
+    return value or None
+
+
 def _read_qgs_from_qgz(data: bytes) -> tuple[str, bytes] | None:
     with zipfile.ZipFile(io.BytesIO(data)) as qgz:
         qgs_names = [name for name in qgz.namelist() if name.lower().endswith(".qgs")]
@@ -201,7 +216,7 @@ def _find_project_xml(file_bytes: bytes) -> tuple[str, bytes] | None:
     return None
 
 
-def _project_extent(root: ET.Element) -> dict | None:
+def _project_extent(root: ET.Element, crs: str | None) -> dict | None:
     extent = _first_named(root, "extent")
     if extent is None:
         return None
@@ -211,7 +226,26 @@ def _project_extent(root: ET.Element) -> dict | None:
     }
     if any(value is None for value in values.values()):
         return None
-    return {**values, "crs": "EPSG:4326"}
+    return {**values, "crs": crs or "EPSG:4326"}
+
+
+def _layer_tree_layers(root: ET.Element):
+    root_group = _first_named(root, "layer-tree-group")
+    if root_group is None:
+        yield from _iter_named(root, "layer-tree-layer")
+        return
+
+    def walk(group: ET.Element, group_path: list[str]):
+        for child in list(group):
+            tag = _strip_namespace(child.tag)
+            if tag == "layer-tree-group":
+                group_name = (child.attrib.get("name") or "").strip()
+                next_path = [*group_path, group_name] if group_name else group_path
+                yield from walk(child, next_path)
+            elif tag == "layer-tree-layer":
+                yield child, group_path
+
+    yield from walk(root_group, [])
 
 
 def extract_qgis_project_metadata_from_archive(file_bytes: bytes) -> dict | None:
@@ -230,8 +264,14 @@ def extract_qgis_project_metadata_from_archive(file_bytes: bytes) -> dict | None
         if layer_id:
             map_layers_by_id[layer_id] = map_layer
 
+    project_crs = _project_crs(root)
+
     tree_layers = []
-    for order, tree_layer in enumerate(_iter_named(root, "layer-tree-layer")):
+    for order, tree_item in enumerate(_layer_tree_layers(root)):
+        if isinstance(tree_item, tuple):
+            tree_layer, group_path = tree_item
+        else:
+            tree_layer, group_path = tree_item, []
         layer_id = tree_layer.attrib.get("id")
         map_layer = map_layers_by_id.get(layer_id or "")
         source = None
@@ -246,6 +286,8 @@ def extract_qgis_project_metadata_from_archive(file_bytes: bytes) -> dict | None
                 "source_basename": _layer_source_basename(source or tree_layer.attrib.get("source")),
                 "visible": tree_layer.attrib.get("checked", "Qt::Checked") != "Qt::Unchecked",
                 "order": order,
+                "group_name": group_path[-1] if group_path else None,
+                "group_path": group_path,
                 "style": _layer_style(map_layer) if map_layer is not None else None,
             }
         )
@@ -263,6 +305,8 @@ def extract_qgis_project_metadata_from_archive(file_bytes: bytes) -> dict | None
                     "source_basename": _layer_source_basename(source),
                     "visible": True,
                     "order": order,
+                    "group_name": None,
+                    "group_path": [],
                     "style": _layer_style(map_layer),
                 }
             )
@@ -272,6 +316,7 @@ def extract_qgis_project_metadata_from_archive(file_bytes: bytes) -> dict | None
         "source": source_name,
         "hide_basemap": True,
         "background": "white",
-        "extent": _project_extent(root),
+        "crs": project_crs,
+        "extent": _project_extent(root, project_crs),
         "layers": tree_layers,
     }

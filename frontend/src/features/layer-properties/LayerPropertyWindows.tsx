@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   CLASSIFICATION_METHODS,
@@ -491,6 +491,7 @@ export function SymbolEditorWindow(props: {
   const currentSymbolType = legendSymbolType(props.geometryKind, props.classItem);
   const [localPosition, setLocalPosition] = useState(props.position);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const windowElRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setLocalPosition(props.position);
@@ -501,15 +502,24 @@ export function SymbolEditorWindow(props: {
       return undefined;
     }
     const activeDragOffset = dragOffset;
+    const draggedEl = windowElRef.current;
+    let latest = localPosition;
 
     function handlePointerMove(event: PointerEvent) {
-      setLocalPosition({
-        x: Math.min(Math.max(8, event.clientX - activeDragOffset.x), Math.max(8, window.innerWidth - 360)),
-        y: Math.min(Math.max(8, event.clientY - activeDragOffset.y), Math.max(8, window.innerHeight - 220)),
-      });
+      const nextX = Math.min(Math.max(8, event.clientX - activeDragOffset.x), Math.max(8, window.innerWidth - 360));
+      const nextY = Math.min(Math.max(8, event.clientY - activeDragOffset.y), Math.max(8, window.innerHeight - 220));
+      latest = { x: nextX, y: nextY };
+      // Двигаем окно напрямую через style, без setState на каждый move.
+      if (draggedEl) {
+        draggedEl.style.left = `${nextX}px`;
+        draggedEl.style.top = `${nextY}px`;
+      } else {
+        setLocalPosition(latest);
+      }
     }
 
     function handlePointerUp() {
+      setLocalPosition(latest);
       setDragOffset(null);
     }
 
@@ -523,6 +533,7 @@ export function SymbolEditorWindow(props: {
 
   return (
     <section
+      ref={windowElRef}
       className="symbol-editor-window"
       style={{ left: localPosition.x, top: localPosition.y, zIndex: props.zIndex }}
       onPointerDown={props.onFocus}

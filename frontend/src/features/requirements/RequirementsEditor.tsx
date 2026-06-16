@@ -113,7 +113,6 @@ export function RequirementsEditor(props: {
           >
             <option value="">Не задан</option>
             <option value="shapefile_zip">Shapefile ZIP</option>
-            <option value="geojson">GeoJSON</option>
             <option value="docx">DOCX</option>
             <option value="txt">TXT</option>
           </select>
@@ -217,4 +216,3 @@ export function RequirementsEditor(props: {
     </section>
   );
 }
-

@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     ai_digitizer_url: str = "http://ai-digitizer:8790"
     ai_digitizer_timeout_seconds: int = 45
 
+    # Корзина заданий: сколько дней удалённое задание лежит восстановимым,
+    # прежде чем фоновая задача удалит его физически (вместе со сдачами).
+    assignment_trash_retention_days: int = 7
+
     @property
     def database_url(self) -> str:
         return (

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Map from "ol/Map";
 import View from "ol/View";
 import GeoJSON from "ol/format/GeoJSON";
@@ -13,10 +13,14 @@ type Submission = {
   assignment_id: number;
   original_filename: string;
   status: string;
+  review_status?: string;
+  review_comment?: string | null;
   size_bytes: number;
   created_at: string;
   download_url: string;
 };
+
+type ReviewDecision = "returned" | "accepted" | "pending";
 
 type SubmissionAsset = {
   id: number;
@@ -114,6 +118,13 @@ function statusLabel(status: string) {
   return status;
 }
 
+function reviewStatusLabel(reviewStatus?: string) {
+  const value = (reviewStatus ?? "pending").toLowerCase();
+  if (value === "returned") return "Возвращена на переделку";
+  if (value === "accepted") return "Принята";
+  return "Ждёт проверки";
+}
+
 function isPreviewableAsset(asset: SubmissionAsset) {
   return asset.asset_type === "layer" && ["geojson", "shapefile_zip"].includes(asset.detected_format);
 }
@@ -135,7 +146,31 @@ export function SubmissionPanel(props: {
   onMapFeatureSelect: (index: number | null) => void;
   onDraftSubmitted?: (submission: Submission) => void | Promise<void>;
   onPreviewReport?: (asset: SubmissionAsset) => void;
+  onReviewSubmission?: (id: number, decision: ReviewDecision, comment?: string) => void;
+  onRenameSubmission?: (id: number, filename: string) => void;
+  onDownloadSubmission?: (submission: Submission) => void;
 }) {
+  const selectedSubmission =
+    props.submissions.find((submission) => submission.id === props.selectedSubmissionId) ?? null;
+  const [reviewComment, setReviewComment] = useState("");
+  // Подставляем комментарий выбранной сдачи при смене выбора.
+  useEffect(() => {
+    setReviewComment(selectedSubmission?.review_comment ?? "");
+  }, [props.selectedSubmissionId, selectedSubmission?.review_comment]);
+
+  function promptRename() {
+    if (!props.onRenameSubmission || !selectedSubmission) {
+      return;
+    }
+    const name = window.prompt(
+      "Новое имя файла сдачи (например, Иванов_3):",
+      selectedSubmission.original_filename,
+    );
+    if (name && name.trim()) {
+      props.onRenameSubmission(selectedSubmission.id, name.trim());
+    }
+  }
+
   return (
     <section className="section-panel">
       <div className="section-heading">
@@ -152,6 +187,11 @@ export function SubmissionPanel(props: {
           {props.selectedSubmissionId ? (
             <button onClick={() => openMapViewer(props.selectedSubmissionId!)} disabled={props.isLoading}>
               Слои в новой вкладке
+            </button>
+          ) : null}
+          {props.selectedSubmissionId && props.onRenameSubmission ? (
+            <button onClick={promptRename} disabled={props.isLoading} title="Переименовать файл сдачи">
+              Переименовать
             </button>
           ) : null}
           {(() => {
@@ -186,22 +226,90 @@ export function SubmissionPanel(props: {
         <div className="list-stack">
           {props.submissions.length === 0 ? <p className="muted">Пока нет загруженных работ.</p> : null}
           {props.submissions.map((submission) => (
-            <button
-              key={submission.id}
-              className={submission.id === props.selectedSubmissionId ? "list-item active" : "list-item"}
-              onClick={() => props.onSubmissionSelect(submission.id)}
-              disabled={props.isLoading}
-            >
-              <strong>{submission.original_filename}</strong>
-              <span>
-                #{submission.id} · {statusLabel(submission.status)} ·{" "}
-                {new Date(submission.created_at).toLocaleString()}
-              </span>
-            </button>
+            <div key={submission.id} className="submission-row">
+              <button
+                className={submission.id === props.selectedSubmissionId ? "list-item active" : "list-item"}
+                onClick={() => props.onSubmissionSelect(submission.id)}
+                disabled={props.isLoading}
+              >
+                <strong>{submission.original_filename}</strong>
+                <span>
+                  #{submission.id} · {statusLabel(submission.status)} · {reviewStatusLabel(submission.review_status)} ·{" "}
+                  {new Date(submission.created_at).toLocaleString()}
+                </span>
+              </button>
+              {props.onDownloadSubmission ? (
+                <button
+                  className="submission-download-icon"
+                  onClick={() => props.onDownloadSubmission!(submission)}
+                  disabled={props.isLoading}
+                  title="Скачать работу"
+                  aria-label={`Скачать ${submission.original_filename}`}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
           ))}
         </div>
 
         <div className="details-panel">
+          {props.mode === "teacher" && props.onReviewSubmission && selectedSubmission ? (
+            <div className="review-decision-box">
+              <h3>Решение по работе</h3>
+              <label className="review-comment-label">
+                Комментарий студенту (замечания, что исправить)
+                <textarea
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                  placeholder="Например: контур озера слишком грубый, добавьте южный пруд…"
+                  rows={3}
+                />
+              </label>
+              <div className="button-row">
+                <button
+                  className="warn"
+                  onClick={() => props.onReviewSubmission?.(selectedSubmission.id, "returned", reviewComment)}
+                  disabled={props.isLoading}
+                  title="Вернуть студенту на переделку — задание снова появится у него в списке"
+                >
+                  Вернуть на переделку
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => props.onReviewSubmission?.(selectedSubmission.id, "accepted", reviewComment)}
+                  disabled={props.isLoading}
+                  title="Принять работу"
+                >
+                  Принять
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {props.mode === "student" && selectedSubmission ? (
+            <div className={`student-review-status review-${(selectedSubmission.review_status ?? "pending").toLowerCase()}`}>
+              <strong>Статус проверки: {reviewStatusLabel(selectedSubmission.review_status)}</strong>
+              {selectedSubmission.review_comment ? (
+                <p className="review-comment-text">Комментарий преподавателя: {selectedSubmission.review_comment}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           {props.aiReview ? (
             <div className="review-box">
               <div className="review-heading">

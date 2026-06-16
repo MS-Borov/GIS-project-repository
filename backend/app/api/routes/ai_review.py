@@ -76,32 +76,15 @@ def _select_report_asset(assets: list[SubmissionAsset]) -> SubmissionAsset | Non
     )
 
 
-@router.post("/{submission_id}/ai-review")
-def create_ai_review(
-    request: Request,
-    submission_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    AI review в multi-layer режиме.
+def compute_ai_review(db: Session, submission_id: int) -> dict:
+    """Полное построение AI-обзора сдачи.
 
-    Источники для review:
-    - report asset -> extract text -> report analysis
-    - requirements_summary -> общий итог формальной многослойной проверки
-    - requirements_output -> частные проверки по ожидаемым слоям
-
-    Здесь больше нет центральной зависимости от одного target GIS asset.
+    Источники: report asset -> текст -> анализ; requirements_summary -> общий
+    итог формальной проверки; requirements_output -> проверки по ожидаемым слоям.
     """
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
-    ensure_submission_access(submission, current_user, db=db)
-    enforce_rate_limit(
-        build_rate_limit_key("ai-review", get_client_ip(request), str(current_user.id)),
-        max_requests=10,
-        window_seconds=600,
-    )
+        raise ValueError(f"Submission {submission_id} not found")
 
     assignment = submission.assignment
 
@@ -288,3 +271,23 @@ def create_ai_review(
         "report_assignment_match": report_assignment_match,
         "ai_review": result,
     }
+
+
+@router.post("/{submission_id}/ai-review")
+def create_ai_review(
+    request: Request,
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI-обзор сдачи: строится синхронно и возвращается сразу в ответе."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    ensure_submission_access(submission, current_user, db=db)
+    enforce_rate_limit(
+        build_rate_limit_key("ai-review", get_client_ip(request), str(current_user.id)),
+        max_requests=10,
+        window_seconds=600,
+    )
+    return compute_ai_review(db, submission_id)

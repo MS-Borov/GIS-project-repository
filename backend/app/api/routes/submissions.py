@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 import io
 import logging
@@ -36,7 +36,7 @@ from app.services.storage import (
 from app.services.submission_archive_parser import ArchiveTooLargeError, parse_submission_archive
 from app.services.submission_validator import validate_submission_file
 from app.services.asset_validator import validate_asset_from_storage
-from app.services.geojson_preview import build_geojson_preview, parse_preview_bbox
+from app.services.geojson_preview import MAX_PREVIEW_FEATURES, build_geojson_preview, parse_preview_bbox
 from app.services.qgis_project_parser import (
     extract_qgis_project_metadata_from_archive as parse_qgis_project_metadata_from_archive,
 )
@@ -214,7 +214,7 @@ def _extract_qgis_project_metadata_from_archive(file_bytes: bytes, depth: int = 
 def _style_manifest_from_qgis_project(project: dict | None) -> dict | None:
     layers = []
     for layer in (project or {}).get("layers") or []:
-        if not isinstance(layer, dict) or not layer.get("style"):
+        if not isinstance(layer, dict):
             continue
         source_basename = layer.get("source_basename")
         layer_name = layer.get("name") or source_basename
@@ -226,7 +226,8 @@ def _style_manifest_from_qgis_project(project: dict | None) -> dict | None:
             "asset_name": f"{source_basename}.zip" if source_basename else None,
             "export_stem": source_basename,
             "alias": layer_name,
-            "group_name": None,
+            "group_name": layer.get("group_name"),
+            "group_path": layer.get("group_path") or [],
             "style": layer.get("style"),
         })
 
@@ -337,6 +338,8 @@ def to_submission_read(submission: Submission) -> SubmissionRead:
         content_type=submission.content_type,
         size_bytes=submission.size_bytes,
         status=submission.status,
+        review_status=submission.review_status or "pending",
+        review_comment=submission.review_comment,
         created_at=submission.created_at,
         download_url=f"/downloads/submissions/{submission.id}",
     )
@@ -363,7 +366,7 @@ def to_submission_asset_read(asset: SubmissionAsset) -> SubmissionAssetRead:
 def preview_local_layer_files(
     request: Request,
     files: list[UploadFile] = File(...),
-    max_features: int = Query(500, ge=1, le=1000),
+    max_features: int = Query(MAX_PREVIEW_FEATURES, ge=1, le=MAX_PREVIEW_FEATURES),
     bbox: str | None = Query(None),
     clip_boundary: str | None = Query(None),
     current_user: User = Depends(get_current_user),
@@ -391,10 +394,12 @@ def preview_local_layer_files(
     grouped_files: dict[str, list[tuple[str, bytes]]] = {}
     ignored_files: list[str] = []
 
+    from app.services.storage import read_upload_bounded
     for upload in files:
         filename = Path(upload.filename or "").name
         suffix = Path(filename).suffix.lower()
-        data = upload.file.read()
+        # Bounded read — на случай если кто-то скинет 500MB shapefile-компонент
+        data = read_upload_bounded(upload, settings.max_archive_upload_bytes)
 
         if suffix not in LOCAL_SHAPEFILE_EXTENSIONS:
             ignored_files.append(filename)
@@ -493,7 +498,7 @@ def preview_submission_archive_before_submit(
     request: Request,
     assignment_id: int = Form(...),
     file: UploadFile = File(...),
-    max_features: int = Query(500, ge=1, le=1000),
+    max_features: int = Query(MAX_PREVIEW_FEATURES, ge=1, le=MAX_PREVIEW_FEATURES),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_student),
 ):
@@ -612,7 +617,7 @@ def preview_submission_archive_before_submit(
 def preview_temporary_archive_asset_geojson(
     preview_token: str,
     asset_id: int,
-    max_features: int = Query(500, ge=1, le=1000),
+    max_features: int = Query(MAX_PREVIEW_FEATURES, ge=1, le=MAX_PREVIEW_FEATURES),
     bbox: str | None = Query(None),
     clip_boundary: str | None = Query(None),
     current_user: User = Depends(get_current_user),
@@ -686,7 +691,7 @@ def create_submission(
         )
 
         assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
-        if not assignment:
+        if not assignment or assignment.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Assignment not found")
         _ensure_student_can_submit_assignment(assignment, current_user, db)
 
@@ -713,6 +718,9 @@ def create_submission(
             content_type=bundle_content_type,
             size_bytes=len(bundle_bytes),
             status="uploaded",
+            # Новая (пере)сдача снова ждёт проверки → задание скрывается у студента
+            # до решения преподавателя.
+            review_status="pending",
         )
         db.add(submission)
         db.commit()
@@ -804,9 +812,24 @@ def create_submission(
             .first()
         )
 
-        expected_outputs = requirements.expected_outputs_json if requirements else None
+        # Формат сдачи «только отчёт» (submission_format == "report_only") означает,
+        # что GIS-слои для задания не ожидаются — формальную проверку выходных слоёв
+        # выполнять не нужно. Дополнительно отбрасываем «пустые»/фантомные ожидаемые
+        # выходы (без имени и без формата): такие остаются от незаполненных строк в
+        # редакторе требований и иначе приводят к ложной ошибке
+        # «Не найден asset для ожидаемого output 'None'».
+        submission_format = (requirements.submission_format if requirements else None) or "archive"
+        report_only_assignment = submission_format == "report_only"
 
-        if expected_outputs:
+        raw_expected_outputs = requirements.expected_outputs_json if requirements else None
+        expected_outputs = [
+            eo
+            for eo in (raw_expected_outputs or [])
+            if isinstance(eo, dict)
+            and ((eo.get("name") or "").strip() or (eo.get("deliverable_format") or "").strip())
+        ]
+
+        if expected_outputs and not report_only_assignment:
             match_result = match_assets_to_expected_outputs(
                 created_assets,
                 expected_outputs=expected_outputs,
@@ -900,32 +923,41 @@ def create_submission(
             db.commit()
 
         else:
-            # Старый упрощённый режим можно временно оставить для заданий с одним слоем
-            target_asset = choose_target_gis_asset(created_assets, requirements)
+            # Старый упрощённый режим можно временно оставить для заданий с одним слоем.
+            # Для задания «только отчёт» целевой GIS-слой не выбираем вовсе — даже если
+            # студент приложил лишний слой, выполняется report-only обзор.
+            target_asset = (
+                None if report_only_assignment
+                else choose_target_gis_asset(created_assets, requirements)
+            )
 
             if target_asset is None:
-                report_only_mode = _has_report_asset(created_assets) and not _has_layer_asset(created_assets)
+                report_only_mode = report_only_assignment or (
+                    _has_report_asset(created_assets) and not _has_layer_asset(created_assets)
+                )
+                # Сопоставление слоёв с требованиями — best-effort. Если целевой слой
+                # выбрать однозначно нельзя, это НЕ ошибка студента: техническая проверка
+                # каждого слоя уже выполнена отдельно и несёт реальный вердикт. Поэтому
+                # ставим нейтральный passed, чтобы не «опускать» всю сдачу ложным warning.
                 requirement_evaluation = {
-                    "status": "passed" if report_only_mode else "warning",
+                    "status": "passed",
                     "message": (
                         "Submission содержит только report asset. Выполняется report-only review без GIS-layer formal-check."
                         if report_only_mode
                         else (
-                            "Не удалось однозначно выбрать целевой GIS-asset для проверки по требованиям. "
-                            "Выполнена только техническая проверка assets."
+                            "Выполнена техническая проверка слоёв сдачи. "
+                            "Статус каждого слоя приведён в результатах технической проверки."
                         )
                     ),
                     "result_json": {
-                        "mode": "report_only_submission" if report_only_mode else "target_asset_not_selected",
+                        "mode": "report_only_submission" if report_only_mode else "technical_check_only",
                         "problems": [],
-                        "warnings": []
-                        if report_only_mode
-                        else [
-                            "Не удалось однозначно выбрать целевой GIS-asset."
-                        ],
+                        "warnings": [],
                         "passed_rules": [
                             "Report asset uploaded and recognized."
-                        ] if report_only_mode else [],
+                        ] if report_only_mode else [
+                            "Техническая проверка слоёв выполнена."
+                        ],
                     },
                 }
             else:
@@ -1041,6 +1073,75 @@ def get_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     ensure_submission_access(submission, current_user, db=db)
+    return to_submission_read(submission)
+
+
+@router.patch("/{submission_id}/review", response_model=SubmissionRead)
+def review_submission(
+    submission_id: int,
+    decision: str = Body(..., embed=True, description="returned | accepted | pending"),
+    comment: str | None = Body(default=None, embed=True, description="Комментарий студенту (замечания)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Решение преподавателя по сдаче.
+
+    - ``returned`` — вернуть на переделку: задание снова появляется у студента;
+    - ``accepted`` — принять работу;
+    - ``pending`` — снять решение (вернуть в очередь на проверку).
+    """
+    if current_user.role == "student":
+        raise HTTPException(status_code=403, detail="Только преподаватель может оценивать сдачи")
+
+    allowed = {"returned", "accepted", "pending"}
+    if decision not in allowed:
+        raise HTTPException(status_code=400, detail=f"decision must be one of {sorted(allowed)}")
+
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    # Для преподавателя проверяем владение курсом сдачи.
+    ensure_submission_access(submission, current_user, db=db)
+
+    submission.review_status = decision
+    if comment is not None:
+        submission.review_comment = comment.strip() or None
+    db.commit()
+    db.refresh(submission)
+    return to_submission_read(submission)
+
+
+@router.patch("/{submission_id}/rename", response_model=SubmissionRead)
+def rename_submission(
+    submission_id: int,
+    filename: str = Body(..., embed=True, description="Новое имя файла сдачи"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Переименование сдачи (отображаемое имя и имя при скачивании).
+    Доступно студенту-владельцу, преподавателю курса и администратору."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    ensure_submission_access(submission, current_user, db=db)
+
+    raw = (filename or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Имя файла не может быть пустым")
+    # Берём только имя файла (без путей) и чистим небезопасные символы.
+    base = Path(raw.replace("\\", "/")).name
+    for ch in '\\/:*?"<>|':
+        base = base.replace(ch, "_")
+    base = base.strip()
+    if not base:
+        raise HTTPException(status_code=400, detail="Недопустимое имя файла")
+    # Сохраняем исходное расширение, если в новом имени его нет.
+    old_ext = Path(submission.original_filename).suffix
+    if not Path(base).suffix and old_ext:
+        base = f"{base}{old_ext}"
+    submission.original_filename = base[:255]
+    db.commit()
+    db.refresh(submission)
     return to_submission_read(submission)
 
 
